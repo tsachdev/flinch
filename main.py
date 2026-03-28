@@ -1,0 +1,83 @@
+import time
+import schedule
+from queue.bus import init_queue, enqueue
+from gateway.router import register
+from agent.loop import run_agent
+from memory.writer import write_session
+from memory.summarizer import summarize_today
+
+@register("support_ticket")
+def handle_support_ticket(event):
+    result = run_agent(event)
+    write_session(result)
+
+@register("store_event")
+def handle_store_event(event):
+    result = run_agent(event)
+    write_session(result)
+
+@register("cron")
+def handle_cron(event):
+    job = event["payload"].get("job")
+    if job == "daily_summary":
+        summarize_today()
+    elif job == "email_review":
+        result = run_agent(event)
+        write_session(result)
+
+@register("message")
+def handle_message(event):
+    result = run_agent(event)
+    write_session(result)
+
+def start_scheduler():
+    schedule.every().day.at("23:59").do(
+        lambda: enqueue("cron", "scheduler", {"job": "daily_summary"})
+    )
+    schedule.every().day.at("08:00").do(
+        lambda: enqueue("cron", "scheduler", {"job": "email_review"})
+    )
+    print("[scheduler] daily summary at 23:59, email review at 08:00")
+
+if __name__ == "__main__":
+    print("\n🦞 gen-claw starting...\n")
+
+    init_queue()
+    start_scheduler()
+
+    enqueue("support_ticket", "zendesk", {
+        "ticket_id": "5001", "subject": "Discount not applied at checkout",
+        "customer_id": "2089", "order_id": "10044"
+    })
+    enqueue("store_event", "pos_system", {
+        "event": "new_inventory", "product_id": "JEANS-IND-001",
+        "store_id": "atlanta_001", "quantity": 24
+    })
+    enqueue("cron", "scheduler", {"job": "email_review"})
+    enqueue("message", "whatsapp", {
+        "contact_id": "3099", "text": "Hey! Are we still on for dinner Friday?",
+        "platform": "whatsapp"
+    })
+
+    print("[main] entering main loop — Ctrl+C to stop\n")
+
+    from gateway.router import HANDLERS
+    from queue.bus import dequeue, complete, fail
+
+    while True:
+        schedule.run_pending()
+        event = dequeue()
+        if event:
+            handler = HANDLERS.get(event["type"])
+            if handler:
+                print(f"\n[main] routing {event['type']} → {handler.__name__}")
+                try:
+                    handler(event)
+                    complete(event["id"])
+                except Exception as e:
+                    print(f"[main] error: {e}")
+                    fail(event["id"])
+            else:
+                print(f"[main] no handler for '{event['type']}' — skipping")
+                fail(event["id"])
+        time.sleep(1)

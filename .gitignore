@@ -1,0 +1,7 @@
+venv/
+gen_claw.db
+config.py
+memory/roles/*/sessions/
+memory/roles/*/summaries/
+__pycache__/
+.env
