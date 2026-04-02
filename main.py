@@ -34,30 +34,16 @@ def start_scheduler():
     schedule.every().day.at("23:59").do(
         lambda: enqueue("cron", "scheduler", {"job": "daily_summary"})
     )
-    schedule.every().day.at("08:00").do(
+    schedule.every(2).hours.do(
         lambda: enqueue("cron", "scheduler", {"job": "email_review"})
     )
-    print("[scheduler] daily summary at 23:59, email review at 08:00")
+    print("[scheduler] daily summary at 23:59, email review every 2 hours")
 
 if __name__ == "__main__":
     print("\n🦞 gen-claw starting...\n")
 
     init_queue()
     start_scheduler()
-
-    enqueue("support_ticket", "zendesk", {
-        "ticket_id": "5001", "subject": "Discount not applied at checkout",
-        "customer_id": "2089", "order_id": "10044"
-    })
-    enqueue("store_event", "pos_system", {
-        "event": "new_inventory", "product_id": "JEANS-IND-001",
-        "store_id": "atlanta_001", "quantity": 24
-    })
-    enqueue("cron", "scheduler", {"job": "email_review"})
-    enqueue("message", "whatsapp", {
-        "contact_id": "3099", "text": "Hey! Are we still on for dinner Friday?",
-        "platform": "whatsapp"
-    })
 
     print("[main] entering main loop — Ctrl+C to stop\n")
 

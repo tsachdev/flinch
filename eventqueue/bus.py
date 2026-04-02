@@ -77,6 +77,57 @@ def _update_status(event_id: str, status: str):
     conn.commit()
     conn.close()
 
+def enqueue_pending(task_type: str, payload: dict, reason: str) -> str:
+    task_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pending_queue (
+            id         TEXT PRIMARY KEY,
+            task_type  TEXT NOT NULL,
+            payload    TEXT NOT NULL,
+            reason     TEXT NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT INTO pending_queue VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+        (task_id, task_type, json.dumps(payload), reason, now, now)
+    )
+    conn.commit()
+    conn.close()
+    return task_id
+
+def get_pending_tasks() -> list:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pending_queue (
+            id TEXT PRIMARY KEY, task_type TEXT, payload TEXT,
+            reason TEXT, status TEXT DEFAULT 'pending',
+            created_at TEXT, updated_at TEXT
+        )
+    """)
+    rows = conn.execute(
+        "SELECT * FROM pending_queue WHERE status = 'pending' ORDER BY created_at ASC"
+    ).fetchall()
+    conn.close()
+    return [{"id": r["id"], "task_type": r["task_type"],
+             "payload": json.loads(r["payload"]), "reason": r["reason"],
+             "created_at": r["created_at"]} for r in rows]
+
+def update_pending_status(task_id: str, status: str):
+    now = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "UPDATE pending_queue SET status = ?, updated_at = ? WHERE id = ?",
+        (status, now, task_id)
+    )
+    conn.commit()
+    conn.close()
+
 def peek_all() -> list:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

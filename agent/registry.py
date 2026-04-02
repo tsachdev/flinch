@@ -8,6 +8,10 @@ TRIGGER_TO_ROLE = {
     "message":        "personal_assistant",
 }
 
+ROLE_MAX_TOKENS = {
+    "email_reviewer": 8192,
+}
+
 def get_role(trigger_type: str) -> dict:
     role_name = TRIGGER_TO_ROLE.get(trigger_type)
     if not role_name:
@@ -16,11 +20,12 @@ def get_role(trigger_type: str) -> dict:
     tools_module = importlib.import_module(f"roles.{role_name}.tools")
     skills = _load_skills(role_name)
     return {
-        "name":    role_name,
-        "persona": module.PERSONA,
-        "tools":   tools_module.TOOLS,
-        "registry": tools_module.TOOL_REGISTRY,
-        "skills":  skills
+        "name":       role_name,
+        "persona":    module.PERSONA,
+        "tools":      tools_module.TOOLS,
+        "registry":   tools_module.TOOL_REGISTRY,
+        "skills":     skills,
+        "max_tokens": ROLE_MAX_TOKENS.get(role_name, 1024),
     }
 
 def _load_skills(role_name: str) -> str:

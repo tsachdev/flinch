@@ -21,7 +21,7 @@ def run_agent(event: dict) -> dict:
     while True:
         response = client.messages.create(
             model=MODEL,
-            max_tokens=1024,
+            max_tokens=role.get("max_tokens", 1024),
             system=system_prompt,
             tools=role["tools"],
             messages=messages
