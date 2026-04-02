@@ -1,4 +1,4 @@
-from queue.bus import init_queue, enqueue, dequeue, complete, peek_all
+from eventqueue.bus import init_queue, enqueue, dequeue, complete, peek_all
 
 init_queue()
 

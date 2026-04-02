@@ -5,3 +5,6 @@ memory/roles/*/sessions/
 memory/roles/*/summaries/
 __pycache__/
 .env
+.claude/
+credentials.json
+token.json

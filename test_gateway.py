@@ -1,4 +1,4 @@
-from queue.bus import init_queue, enqueue
+from eventqueue.bus import init_queue, enqueue
 from gateway.router import register, run
 
 init_queue()

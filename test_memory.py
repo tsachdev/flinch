@@ -1,4 +1,4 @@
-from queue.bus import init_queue
+from eventqueue.bus import init_queue
 from agent.loop import run_agent
 from memory.writer import write_session
 

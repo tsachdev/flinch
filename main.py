@@ -1,6 +1,6 @@
 import time
 import schedule
-from queue.bus import init_queue, enqueue
+from eventqueue.bus import init_queue, enqueue
 from gateway.router import register
 from agent.loop import run_agent
 from memory.writer import write_session
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     print("[main] entering main loop — Ctrl+C to stop\n")
 
     from gateway.router import HANDLERS
-    from queue.bus import dequeue, complete, fail
+    from eventqueue.bus import dequeue, complete, fail
 
     while True:
         schedule.run_pending()

@@ -1,5 +1,5 @@
 import time
-from queue.bus import init_queue, dequeue, complete, fail
+from eventqueue.bus import init_queue, dequeue, complete, fail
 
 HANDLERS = {}
 

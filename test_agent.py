@@ -1,4 +1,4 @@
-from queue.bus import init_queue, enqueue
+from eventqueue.bus import init_queue, enqueue
 from agent.loop import run_agent
 
 init_queue()
