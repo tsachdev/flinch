@@ -1,4 +1,4 @@
-from flask import Flask, redirect, request
+from flask import Flask, jsonify, redirect, request
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import sqlite3
@@ -251,6 +251,30 @@ def render_page(active_tab, content, pending_count):
 # ---------------------------------------------------------------------------
 # Overview (unchanged)
 # ---------------------------------------------------------------------------
+
+@app.route('/api/status')
+def api_status():
+    pending = get_pending_tasks()
+
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        "SELECT created_at FROM queue WHERE type = 'cron' AND status = 'completed'"
+        " ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+
+    last_run = next_run = None
+    if row:
+        last_run_dt = datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc)
+        last_run = last_run_dt.isoformat()
+        next_run = (last_run_dt + timedelta(hours=2)).isoformat()
+
+    return jsonify({
+        "pending_count": len(pending),
+        "last_run":  last_run,
+        "next_run":  next_run,
+    })
+
 
 @app.route('/')
 def root():

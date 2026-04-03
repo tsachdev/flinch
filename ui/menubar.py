@@ -1,16 +1,17 @@
+import json
 import sys
+import urllib.request
 import rumps
-import sqlite3
 import subprocess
 import webbrowser
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import SERVER_HOST
 
-DB_PATH     = Path(__file__).parent.parent / "gen_claw.db"
-CONSOLE_URL = "http://localhost:5001"
+CONSOLE_URL  = "http://localhost:5001"
+STATUS_URL   = "http://localhost:5001/api/status"
 
 class GenClawApp(rumps.App):
     def __init__(self):
@@ -58,7 +59,8 @@ class GenClawApp(rumps.App):
         webbrowser.open(CONSOLE_URL)
 
     def refresh(self, _):
-        pending = self._get_pending_count()
+        status  = self._fetch_status()
+        pending = status["pending_count"]
         self.title = f"🦞 {pending}" if pending > 0 else "🦞"
 
         if pending == 0:
@@ -68,63 +70,25 @@ class GenClawApp(rumps.App):
         else:
             self.pending_item.title = f"{pending} emails pending approval"
 
-        last_run, next_run = self._get_run_times()
-        self.last_run_item.title = f"Last run: {last_run}"
-        self.next_run_item.title = f"Next run: {next_run}"
+        self.last_run_item.title = f"Last run: {_format_ts(status['last_run'])}"
+        self.next_run_item.title = f"Next run: {_format_ts(status['next_run'])}"
 
     def quit_app(self, _):
         self._kill_tunnel()
         rumps.quit_application()
 
     # -----------------------------------------------------------------------
-    # Database
+    # Status API
     # -----------------------------------------------------------------------
 
-    def _get_pending_count(self) -> int:
+    def _fetch_status(self) -> dict:
         try:
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS pending_queue (
-                    id TEXT PRIMARY KEY, task_type TEXT, payload TEXT,
-                    reason TEXT, status TEXT DEFAULT 'pending',
-                    created_at TEXT, updated_at TEXT
-                )
-            """)
-            row = conn.execute(
-                "SELECT COUNT(*) FROM pending_queue WHERE status = 'pending'"
-            ).fetchone()
-            conn.close()
-            return row[0] if row else 0
+            with urllib.request.urlopen(STATUS_URL, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+            return data
         except Exception as e:
-            print(f"[menubar] db error: {e}")
-            return 0
-
-    def _get_run_times(self) -> tuple[str, str]:
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            row = conn.execute("""
-                SELECT created_at FROM queue
-                WHERE type = 'cron'
-                ORDER BY created_at DESC LIMIT 1
-            """).fetchone()
-            conn.close()
-
-            if not row:
-                return "—", "—"
-
-            last_dt = datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc)
-            last_str = _friendly_time(last_dt)
-
-            next_dt  = last_dt + timedelta(hours=2)
-            now      = datetime.now(timezone.utc)
-            if next_dt < now:
-                next_dt = now + timedelta(minutes=5)
-            next_str = _friendly_time(next_dt)
-
-            return last_str, next_str
-        except Exception as e:
-            print(f"[menubar] run time error: {e}")
-            return "—", "—"
+            print(f"[menubar] status fetch error: {e}")
+            return {"pending_count": 0, "last_run": "unavailable", "next_run": "unavailable"}
 
     # -----------------------------------------------------------------------
     # SSH tunnel
@@ -159,6 +123,19 @@ class GenClawApp(rumps.App):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _format_ts(ts) -> str:
+    """Format an ISO timestamp string from the API for display, or pass through fallback strings."""
+    if not ts or ts == "unavailable":
+        return ts or "unavailable"
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return _friendly_time(dt)
+    except Exception:
+        return ts
+
 
 def _friendly_time(dt: datetime) -> str:
     now   = datetime.now(timezone.utc)
