@@ -23,3 +23,12 @@ MODEL = "claude-haiku-4-5-20251001"
 # Used by the Mac menu bar app to establish an SSH tunnel to the console UI
 # Example: "root@123.456.789.000"
 SERVER_HOST = "root@YOUR_SERVER_IP"
+
+python# Path to your Yahoo Finance portfolio CSV export
+MARKET_WATCHLIST_FILE = "portfolio.csv"
+
+# Metrics to include in analysis
+MARKET_METRICS = ["pe_ratio", "ps_ratio", "analyst_target", "guidance"]
+
+# Email to receive earnings summaries
+MARKET_WATCHER_RECIPIENT = "youremail@email.com"

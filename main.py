@@ -24,11 +24,21 @@ def handle_cron(event):
     elif job == "email_review":
         result = run_agent(event)
         write_session(result)
+    elif job == "market_watch":
+        result = run_agent(event)
+        write_session(result)
 
 @register("message")
 def handle_message(event):
     result = run_agent(event)
     write_session(result)
+
+@register("market_event")
+def handle_market_event(event):
+    job = event["payload"].get("job")
+    if job == "market_watch":
+        result = run_agent(event)
+        write_session(result)
 
 def start_scheduler():
     schedule.every().day.at("23:59").do(
@@ -37,7 +47,10 @@ def start_scheduler():
     schedule.every(2).hours.do(
         lambda: enqueue("cron", "scheduler", {"job": "email_review"})
     )
-    print("[scheduler] daily summary at 23:59, email review every 2 hours")
+    schedule.every().day.at("08:00").do(
+        lambda: enqueue("market_event", "scheduler", {"job": "market_watch"})
+    )
+    print("[scheduler] daily summary at 23:59, email review every 2 hours, market watch at 08:00")
 
 if __name__ == "__main__":
     print("\n🦞 Flinch starting...\n")

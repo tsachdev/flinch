@@ -6,10 +6,12 @@ TRIGGER_TO_ROLE = {
     "store_event":    "store_concierge",
     "cron":           "email_reviewer",
     "message":        "personal_assistant",
+    "market_event":   "market_watcher",
 }
 
 ROLE_MAX_TOKENS = {
     "email_reviewer": 8192,
+    "market_watcher": 4096,
 }
 
 def get_role(trigger_type: str) -> dict:
