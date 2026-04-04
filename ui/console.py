@@ -10,7 +10,7 @@ from eventqueue.bus import get_pending_tasks, update_pending_status
 from roles.email_reviewer.tools import delete_email
 
 app = Flask(__name__)
-DB_PATH   = Path(__file__).parent.parent / "gen_claw.db"
+DB_PATH   = Path(__file__).parent.parent / "flinch.db"
 MEMORY_DIR = Path(__file__).parent.parent / "memory"
 
 ROLES = ["support_agent", "store_concierge", "email_reviewer", "personal_assistant"]
@@ -235,13 +235,13 @@ def render_page(active_tab, content, pending_count):
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>gen-claw console</title>
+<title>Flinch console</title>
 <style>{CSS}</style>
 <meta http-equiv="refresh" content="60">
 </head><body>
 <div class="header">
   <span style="font-size:1.3rem">🦞</span>
-  <h1>gen-claw</h1>
+  <h1>Flinch</h1>
   <span class="sub">auto-refresh every 60s &nbsp;·&nbsp; {now}</span>
 </div>
 <div class="tabs">{tab_html}</div>
@@ -465,5 +465,5 @@ def approve_all():
 
 
 if __name__ == '__main__':
-    print("🦞 gen-claw console → http://localhost:5001")
+    print("🦞 Flinch console → http://localhost:5001")
     app.run(host='0.0.0.0', port=5001, debug=False)

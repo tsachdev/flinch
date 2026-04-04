@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "gen_claw.db"
+DB_PATH = Path(__file__).parent.parent / "flinch.db"
 
 def init_queue():
     conn = sqlite3.connect(DB_PATH)

@@ -40,7 +40,7 @@ def start_scheduler():
     print("[scheduler] daily summary at 23:59, email review every 2 hours")
 
 if __name__ == "__main__":
-    print("\n🦞 gen-claw starting...\n")
+    print("\n🦞 Flinch starting...\n")
 
     init_queue()
     start_scheduler()

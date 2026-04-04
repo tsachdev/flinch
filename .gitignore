@@ -1,5 +1,5 @@
 venv/
-gen_claw.db
+flinch.db
 config.py
 memory/roles/*/sessions/
 memory/roles/*/summaries/

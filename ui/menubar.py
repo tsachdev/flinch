@@ -13,7 +13,7 @@ from config import SERVER_HOST
 CONSOLE_URL  = "http://localhost:5001"
 STATUS_URL   = "http://localhost:5001/api/status"
 
-class GenClawApp(rumps.App):
+class FlinchApp(rumps.App):
     def __init__(self):
         super().__init__("🦞", quit_button=None)
         self._tunnel_proc = None
@@ -158,4 +158,4 @@ def _friendly_time(dt: datetime) -> str:
 
 
 if __name__ == "__main__":
-    GenClawApp().run()
+    FlinchApp().run()

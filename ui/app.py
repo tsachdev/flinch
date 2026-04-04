@@ -59,7 +59,7 @@ def index():
     return f"""<!DOCTYPE html>
 <html>
 <head>
-  <title>gen-claw — pending approvals</title>
+  <title>Flinch — pending approvals</title>
   <style>
     body {{ font-family: system-ui, sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 20px; color: #222; }}
     h1 {{ font-size: 1.4rem; margin-bottom: 24px; }}

@@ -40,7 +40,7 @@ def _summarize_role(role: str, today: str) -> Path | None:
     return filepath
 
 def _call_llm(sessions: str, today: str, role: str) -> str:
-    prompt = f"""You are gen-claw's memory summarizer for the {role} role.
+    prompt = f"""You are Flinch's memory summarizer for the {role} role.
 Summarise the sessions below into a concise daily briefing a future {role} agent
 can load as context. Be specific — include names, IDs, and outcomes.
 
