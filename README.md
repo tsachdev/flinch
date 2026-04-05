@@ -18,7 +18,6 @@ Four reference roles are included out of the box:
 |---|---|---|
 | `email_reviewer` | Cron (every 2 hours) | Triages Gmail — queues deletions for approval, marks updates read, drafts replies for action items |
 | `support_agent` | Inbound ticket event | Handles customer support tickets, looks up history, sends notifications |
-| `store_concierge` | Inventory event | Notifies customers when watched items come back in stock |
 | `personal_assistant` | Inbound message | Responds to personal messages with context from shared memory |
 
 ---

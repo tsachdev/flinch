@@ -3,7 +3,6 @@ import importlib
 
 TRIGGER_TO_ROLE = {
     "support_ticket": "support_agent",
-    "store_event":    "store_concierge",
     "cron":           "email_reviewer",
     "message":        "personal_assistant",
     "market_event":   "market_watcher",

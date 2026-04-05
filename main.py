@@ -11,11 +11,6 @@ def handle_support_ticket(event):
     result = run_agent(event)
     write_session(result)
 
-@register("store_event")
-def handle_store_event(event):
-    result = run_agent(event)
-    write_session(result)
-
 @register("cron")
 def handle_cron(event):
     job = event["payload"].get("job")

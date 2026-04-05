@@ -13,10 +13,9 @@ app = Flask(__name__)
 DB_PATH   = Path(__file__).parent.parent / "flinch.db"
 MEMORY_DIR = Path(__file__).parent.parent / "memory"
 
-ROLES = ["support_agent", "store_concierge", "email_reviewer", "personal_assistant"]
+ROLES = ["support_agent", "email_reviewer", "personal_assistant"]
 ROLE_LABELS = {
     "support_agent":      "Support",
-    "store_concierge":    "Store",
     "email_reviewer":     "Email",
     "personal_assistant": "Assistant",
 }
@@ -88,7 +87,6 @@ def _status_color(status):
 def _role_color(trigger):
     return {
         "support_ticket": "#534AB7",
-        "store_event":    "#0f6e56",
         "cron":           "#185fa5",
         "message":        "#993556",
     }.get(trigger, "#888")
@@ -222,7 +220,6 @@ def render_page(active_tab, content, pending_count):
     tabs = [
         ("overview",          "Overview",   ""),
         ("support_agent",     "Support",    ""),
-        ("store_concierge",   "Store",      ""),
         ("email_reviewer",    "Email",
          f'<span class="badge">{pending_count}</span>' if pending_count else ""),
         ("personal_assistant","Assistant",  ""),
@@ -417,9 +414,6 @@ def _render_actions_tab(role, pending):
 
 @app.route('/support_agent')
 def support_tab():   return role_tab("support_agent")
-
-@app.route('/store_concierge')
-def store_tab():     return role_tab("store_concierge")
 
 @app.route('/email_reviewer')
 def email_tab():     return role_tab("email_reviewer")

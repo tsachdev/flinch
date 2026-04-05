@@ -143,7 +143,6 @@ Open `agent/registry.py` and add your trigger type and role name to `TRIGGER_TO_
 ```python
 TRIGGER_TO_ROLE = {
     "support_ticket": "support_agent",
-    "store_event":    "store_concierge",
     "cron":           "email_reviewer",
     "message":        "personal_assistant",
     "billing_query":  "billing_agent",   # ← add this
