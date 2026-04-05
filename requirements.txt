@@ -11,3 +11,4 @@ rumps
 yfinance
 yfinance
 yfinance
+pytest
