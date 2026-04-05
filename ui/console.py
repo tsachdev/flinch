@@ -13,11 +13,12 @@ app = Flask(__name__)
 DB_PATH   = Path(__file__).parent.parent / "flinch.db"
 MEMORY_DIR = Path(__file__).parent.parent / "memory"
 
-ROLES = ["support_agent", "email_reviewer", "personal_assistant"]
+ROLES = ["support_agent", "email_reviewer", "personal_assistant", "market_watcher"]
 ROLE_LABELS = {
     "support_agent":      "Support",
     "email_reviewer":     "Email",
     "personal_assistant": "Assistant",
+    "market_watcher":     "Market",
 }
 
 def _now():
@@ -89,6 +90,7 @@ def _role_color(trigger):
         "support_ticket": "#534AB7",
         "cron":           "#185fa5",
         "message":        "#993556",
+        "market_event":   "#b07d2a",
     }.get(trigger, "#888")
 
 # ---------------------------------------------------------------------------
@@ -223,6 +225,7 @@ def render_page(active_tab, content, pending_count):
         ("email_reviewer",    "Email",
          f'<span class="badge">{pending_count}</span>' if pending_count else ""),
         ("personal_assistant","Assistant",  ""),
+        ("market_watcher",    "Market",     ""),
     ]
     tab_html = "".join(
         f'<a href="/{t}" class="tab{" active" if t == active_tab else ""}">{label}{badge}</a>'
@@ -420,6 +423,9 @@ def email_tab():     return role_tab("email_reviewer")
 
 @app.route('/personal_assistant')
 def assistant_tab(): return role_tab("personal_assistant")
+
+@app.route('/market_watcher')
+def market_tab():    return role_tab("market_watcher")
 
 # ---------------------------------------------------------------------------
 # Approval actions
