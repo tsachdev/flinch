@@ -19,6 +19,7 @@ Four reference roles are included out of the box:
 | `email_reviewer` | Cron (every 2 hours) | Triages Gmail — queues deletions for approval, marks updates read, drafts replies for action items |
 | `support_agent` | Inbound ticket event | Handles customer support tickets, looks up history, sends notifications |
 | `personal_assistant` | Inbound message | Responds to personal messages with context from shared memory |
+| `market_watcher` | Cron (daily 08:00) | Checks earnings calendar for your Yahoo Finance watchlist, emails analysis with P/E, P/S, analyst targets, and 7-day price outlook |
 
 ---
 
@@ -75,6 +76,47 @@ You should see:
 [scheduler] daily summary at 23:59, email review every 2 hours
 [main] entering main loop — Ctrl+C to stop
 ```
+
+---
+
+## See it in action
+
+Flinch runs three agent roles continuously from a single deployment. Here's what a typical day looks like.
+
+**Email reviewer — every 2 hours**
+```
+[agent] session a3f2b1 — role: email_reviewer
+[tool] get_unread_emails({})
+[gmail] fetched 20 unread emails
+[tool] add_to_pending_queue → 8 promotional emails queued for approval
+[tool] mark_read → 9 update emails marked read
+[tool] create_draft → 1 draft reply created for action-required email
+[memory] session note → memory/roles/email_reviewer/sessions/2026-04-05T...md
+```
+
+**Market watcher — every morning at 08:00**
+```
+[agent] session b7c3d2 — role: market_watcher
+[tool] get_earnings_calendar({})
+[market] loaded 38 tickers from portfolio.csv
+[market] 2 upcoming earnings found: NFLX (Apr 16), INFY (Apr 16)
+[tool] get_stock_metrics → NFLX: P/E 39x, forward P/E 25x, analyst target $113 (buy)
+[tool] get_stock_metrics → INFY: P/E 17x, revenue growth 3.2%, earnings growth -5.3%
+[tool] send_email_summary → earnings preview sent
+```
+
+**Console — human-in-the-loop approvals**
+```
+Pending approvals (8)
+LinkedIn Job Alerts — Executive Director role at Inside Higher Ed
+→ [Delete] [Keep] [Later]
+Costco Wholesale — Shop Easter Favorites!
+→ [Delete] [Keep] [Later]
+Office Depot — BOGO deals + Spring Clearance
+→ [Delete] [Keep] [Later]
+```
+
+The full web console runs at `localhost:5001` and shows live queue activity, per-role session history, daily summaries, and pending approval queues.
 
 ---
 
