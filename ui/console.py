@@ -195,9 +195,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 /* pending */
 .pending-card { border: 0.5px solid var(--border); border-radius: 8px;
                 padding: 12px; margin-bottom: 10px; background: var(--card); }
+.pending-card.selected { border-color: #1B2A4A; background: #f0f4f9; }
+.pending-header { display: flex; align-items: flex-start; gap: 10px; }
+.pending-check { margin-top: 2px; accent-color: #1B2A4A; width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
 .pending-sender  { font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
 .pending-subject { font-size: 0.88rem; font-weight: 500; margin-bottom: 4px; }
+.pending-source  { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
 .pending-reason  { font-size: 0.78rem; color: #666; margin-bottom: 10px; }
+.bulk-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.bulk-bar label { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .btn { padding: 5px 14px; border-radius: 7px; border: 0.5px solid var(--border);
        font-size: 0.78rem; font-weight: 500; cursor: pointer;
@@ -393,26 +399,67 @@ def _render_summary_tab(role, sessions, summary):
 
 
 def _render_actions_tab(role, pending):
-    if role != "email_reviewer":
+    if role not in ("email_reviewer", "email_reviewer_microsoft"):
         return '<div class="card"><div class="empty" style="padding:32px 0">No actions pending.</div></div>'
 
     if not pending:
         return '<div class="card"><div class="empty" style="padding:32px 0">No pending approvals.</div></div>'
 
-    bulk  = f'<a class="btn btn-all" href="/approve-all">Delete all ({len(pending)})</a>'
     cards = ""
     for t in pending:
-        cards += f"""<div class="pending-card">
-          <div class="pending-sender">{html.escape(t["payload"].get("sender",""))} &nbsp;·&nbsp; <span style="color:var(--muted)">{t["created_at"][5:16].replace("T", " ")}</span></div>
-          <div class="pending-subject">{html.escape(t["payload"].get("subject",""))}</div>
-          <div class="pending-reason">{html.escape(t["reason"])}</div>
-          <div class="actions">
-            <a class="btn btn-yes"   href="/approve/{t["id"]}">Delete</a>
-            <a class="btn btn-no"    href="/reject/{t["id"]}">Keep</a>
-            <a class="btn btn-later" href="/later/{t["id"]}">Later</a>
+        sender  = html.escape(t["payload"].get("sender", ""))
+        subject = html.escape(t["payload"].get("subject", ""))
+        source  = "Microsoft Outlook" if t["task_type"] == "delete_email_microsoft" else "Gmail"
+        date_str = t["created_at"][5:16].replace("T", " ")
+        cards += f"""<div class="pending-card" id="card-{t['id']}">
+          <div class="pending-header">
+            <input type="checkbox" class="pending-check" id="chk-{t['id']}"
+                   onchange="toggleCard('{t['id']}', this.checked)">
+            <div style="flex:1">
+              <div class="pending-sender">{sender} &nbsp;·&nbsp; {date_str}</div>
+              <div class="pending-subject">{subject}</div>
+              <div class="pending-source">📬 {source}</div>
+              <div class="pending-reason">{html.escape(t['reason'])}</div>
+              <div class="actions">
+                <a class="btn btn-yes"   href="/approve/{t['id']}">Delete</a>
+                <a class="btn btn-no"    href="/reject/{t['id']}">Keep</a>
+                <a class="btn btn-later" href="/later/{t['id']}">Later</a>
+              </div>
+            </div>
           </div>
         </div>"""
-    return f'<div class="card"><h3>Pending approvals ({len(pending)})</h3>{bulk}{cards}</div>'
+
+    bulk_bar = f"""
+    <div class="bulk-bar">
+      <label><input type="checkbox" id="select-all" onchange="selectAll(this.checked)"> Select all</label>
+      <a class="btn btn-yes"   href="#" onclick="bulkAction('approve')">Delete selected</a>
+      <a class="btn btn-no"    href="#" onclick="bulkAction('reject')">Keep selected</a>
+      <a class="btn btn-later" href="#" onclick="bulkAction('later')">Later selected</a>
+      <span id="sel-count" style="font-size:0.78rem;color:var(--muted);margin-left:4px"></span>
+    </div>
+    <script>
+    function toggleCard(id, checked) {{
+      document.getElementById('card-'+id).classList.toggle('selected', checked);
+      updateCount();
+    }}
+    function selectAll(checked) {{
+      document.querySelectorAll('.pending-check').forEach(c => {{
+        c.checked = checked;
+        toggleCard(c.id.replace('chk-',''), checked);
+      }});
+    }}
+    function updateCount() {{
+      const n = document.querySelectorAll('.pending-check:checked').length;
+      document.getElementById('sel-count').textContent = n ? n + ' selected' : '';
+    }}
+    function bulkAction(action) {{
+      const ids = [...document.querySelectorAll('.pending-check:checked')].map(c => c.id.replace('chk-',''));
+      if (!ids.length) {{ alert('Select at least one email first.'); return; }}
+      window.location = '/bulk-' + action + '?ids=' + ids.join(',');
+    }}
+    </script>"""
+
+    return f'<div class="card"><h3>Pending approvals ({len(pending)})</h3>{bulk_bar}{cards}</div>'
 
 
 @app.route('/support_agent')
@@ -437,7 +484,11 @@ def approve(task_id):
     task  = next((t for t in tasks if t['id'] == task_id), None)
     if task:
         try:
-            delete_email(task['payload']['email_id'])
+            if task['task_type'] == 'delete_email_microsoft':
+                from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
+                ms_delete(task['payload']['email_id'])
+            else:
+                delete_email(task['payload']['email_id'])
         except Exception as e:
             print(f"[console] delete error: {e}")
         update_pending_status(task_id, 'approved')
@@ -451,6 +502,41 @@ def reject(task_id):
 @app.route('/later/<task_id>')
 def later(task_id):
     update_pending_status(task_id, 'later')
+    return redirect('/email_reviewer?view=actions')
+
+@app.route('/bulk-approve')
+def bulk_approve():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if not task_id: continue
+        tasks = get_pending_tasks()
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if task:
+            try:
+                if task['task_type'] == 'delete_email_microsoft':
+                    from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
+                    ms_delete(task['payload']['email_id'])
+                else:
+                    delete_email(task['payload']['email_id'])
+            except Exception as e:
+                print(f"[console] bulk approve error: {e}")
+            update_pending_status(task_id, 'approved')
+    return redirect('/email_reviewer?view=actions')
+
+@app.route('/bulk-reject')
+def bulk_reject():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if task_id:
+            update_pending_status(task_id, 'rejected')
+    return redirect('/email_reviewer?view=actions')
+
+@app.route('/bulk-later')
+def bulk_later():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if task_id:
+            update_pending_status(task_id, 'later')
     return redirect('/email_reviewer?view=actions')
 
 @app.route('/approve-all')
