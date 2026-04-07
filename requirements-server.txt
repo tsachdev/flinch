@@ -12,3 +12,4 @@ google-auth-oauthlib==1.3.1
 googleapis-common-protos==1.73.1
 yfinance
 pytest
+msal
