@@ -10,3 +10,5 @@ __pycache__/
 credentials.json
 token.json
 portfolio.csv
+microsoft_auth.py
+microsoft_token.json

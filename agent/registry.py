@@ -3,7 +3,8 @@ import importlib
 
 TRIGGER_TO_ROLE = {
     "support_ticket": "support_agent",
-    "cron":           "email_reviewer",
+    "cron":             "email_reviewer",
+    "microsoft_email":  "email_reviewer",
     "message":        "personal_assistant",
     "market_event":   "market_watcher",
 }
@@ -18,10 +19,18 @@ def get_role(trigger_type: str) -> dict:
     if not role_name:
         raise ValueError(f"No role registered for trigger type: {trigger_type}")
     module = importlib.import_module(f"roles.{role_name}.role")
-    tools_module = importlib.import_module(f"roles.{role_name}.tools")
+
+    # Use Microsoft tools for microsoft_email trigger
+    if trigger_type == "microsoft_email":
+        tools_module = importlib.import_module(f"roles.{role_name}.microsoft_tools")
+        account_label = "microsoft"
+    else:
+        tools_module = importlib.import_module(f"roles.{role_name}.tools")
+        account_label = "gmail"
+
     skills = _load_skills(role_name)
     return {
-        "name":       role_name,
+        "name":       f"{role_name}_{account_label}",
         "persona":    module.PERSONA,
         "tools":      tools_module.TOOLS,
         "registry":   tools_module.TOOL_REGISTRY,

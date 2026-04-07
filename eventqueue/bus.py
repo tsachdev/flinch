@@ -92,6 +92,18 @@ def enqueue_pending(task_type: str, payload: dict, reason: str) -> str:
             updated_at TEXT NOT NULL
         )
     """)
+    # Check for existing pending task for this email_id
+    email_id = payload.get("email_id", "")
+    if email_id:
+        existing = conn.execute(
+            "SELECT id FROM pending_queue WHERE payload LIKE ? AND status = 'pending'",
+            (f'%"{email_id}"%',)
+        ).fetchone()
+        if existing:
+            conn.close()
+            print(f"  [pending] already queued → skipping duplicate for {email_id[:16]}...")
+            return existing[0]
+
     conn.execute(
         "INSERT INTO pending_queue VALUES (?, ?, ?, ?, 'pending', ?, ?)",
         (task_id, task_type, json.dumps(payload), reason, now, now)

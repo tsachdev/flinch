@@ -12,3 +12,5 @@ yfinance
 yfinance
 yfinance
 pytest
+msal
+requests

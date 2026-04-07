@@ -24,7 +24,7 @@ MODEL = "claude-haiku-4-5-20251001"
 # Example: "root@123.456.789.000"
 SERVER_HOST = "root@YOUR_SERVER_IP"
 
-python# Path to your Yahoo Finance portfolio CSV export
+# Path to your Yahoo Finance portfolio CSV export
 MARKET_WATCHLIST_FILE = "portfolio.csv"
 
 # Metrics to include in analysis
@@ -32,3 +32,8 @@ MARKET_METRICS = ["pe_ratio", "ps_ratio", "analyst_target", "guidance"]
 
 # Email to receive earnings summaries
 MARKET_WATCHER_RECIPIENT = "youremail@email.com"
+
+# Microsoft Graph API (for Outlook/Office 365 email)
+MICROSOFT_CLIENT_ID  = "your-client-id"
+MICROSOFT_TENANT_ID  = "consumers"
+MICROSOFT_TOKEN_FILE = "microsoft_token.json"

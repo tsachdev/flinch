@@ -403,7 +403,7 @@ def _render_actions_tab(role, pending):
     cards = ""
     for t in pending:
         cards += f"""<div class="pending-card">
-          <div class="pending-sender">{html.escape(t["payload"].get("sender",""))}</div>
+          <div class="pending-sender">{html.escape(t["payload"].get("sender",""))} &nbsp;·&nbsp; <span style="color:var(--muted)">{t["created_at"][5:16].replace("T", " ")}</span></div>
           <div class="pending-subject">{html.escape(t["payload"].get("subject",""))}</div>
           <div class="pending-reason">{html.escape(t["reason"])}</div>
           <div class="actions">
