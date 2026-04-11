@@ -4,7 +4,7 @@
 
 Flinch is a lightweight, self-hosted platform for running role-aware AI agents that respond to events. Something happens in the world — an email arrives, an inventory update fires, a message comes in — and the right agent acts. No deliberation, no human in the loop unless you design one in.
 
-This is Pattern 1 of [the eight AI application patterns](https://ctoloayer.substack.com) — the Reactive pattern. The highest-volume pattern in the global economy, and the one most ripe for AI execution.
+This is Pattern 1 of [the eight AI application patterns](https://ctolayer.substack.com) — the Reactive pattern. The highest-volume pattern in the global economy, and the one most ripe for AI execution.
 
 ---
 
