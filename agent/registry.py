@@ -29,13 +29,8 @@ def get_role(trigger_type: str) -> dict:
         account_label = "gmail"
 
     skills = _load_skills(role_name)
-    # Only append account label for email_reviewer
-    if role_name == "email_reviewer":
-        name = f"{role_name}_{account_label}"
-    else:
-        name = role_name
     return {
-        "name":       name,
+        "name":       role_name,
         "persona":    module.PERSONA,
         "tools":      tools_module.TOOLS,
         "registry":   tools_module.TOOL_REGISTRY,
