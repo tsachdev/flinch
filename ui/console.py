@@ -72,9 +72,12 @@ def _extract_preview(content):
     lines = [l.strip() for l in content.splitlines() if l.strip()]
     for i, line in enumerate(lines):
         if line.startswith("## Agent summary") and i + 1 < len(lines):
-            return lines[i + 1][:120]
+            # Skip separator lines like ---
+            for j in range(i + 1, min(i + 4, len(lines))):
+                if not lines[j].startswith("---") and not lines[j].startswith("#"):
+                    return lines[j][:120]
     for line in lines:
-        if not line.startswith("#") and len(line) > 20:
+        if not line.startswith("#") and not line.startswith("---") and len(line) > 20:
             return line[:120]
     return ""
 
