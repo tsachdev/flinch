@@ -28,3 +28,4 @@ For junk: mark as read, no draft, no notification
 - Executive recruiter outreach (CTO, VP, C-suite roles) → action-required, not promotions
 - mygate maintenance notices → treat them as notifications
 - HSA/insurance/utility statements → treat them as notifications
+- Harvard Business Review - Tip of the Day emails → keep unread, do not delete

@@ -45,9 +45,10 @@ def get_sessions(role, days=7):
     sessions = []
     for f in sorted(sessions_dir.glob("*.md"), reverse=True):
         try:
-            ts_str = f.stem[:19].replace("-", ":")
-            ts_str = ts_str[:10] + "T" + ts_str[11:]
-            ts = datetime.fromisoformat(ts_str).replace(tzinfo=timezone.utc)
+            stem = f.stem  # e.g. 2026-04-07T00-26-31
+            date_part, time_part = stem.split("T")
+            time_fixed = time_part.replace("-", ":")
+            ts = datetime.fromisoformat(f"{date_part}T{time_fixed}").replace(tzinfo=timezone.utc)
             if ts >= cutoff:
                 content = f.read_text()
                 sessions.append({
@@ -394,7 +395,49 @@ def _render_summary_tab(role, sessions, summary):
             '</div></div>'
         )
     html_parts += f'<div>{right}</div>'
-    html_parts += '</div>'
+    html_parts += '</div>'  # closes grid2
+
+    if role == "email_reviewer":
+        html_parts += f"""
+        <div class="card" style="margin-top:16px">
+          <h3>Update email review behaviour</h3>
+          <p style="font-size:0.82rem;color:#666;margin-bottom:12px">
+            Describe what you want the agent to do differently. The skill file will be updated automatically.
+          </p>
+          <textarea id="skill-feedback" rows="3"
+            style="width:100%;font-size:0.82rem;padding:8px;border:0.5px solid var(--border);
+                   border-radius:6px;resize:vertical;font-family:inherit"
+            placeholder="e.g. Don't flag Chamath newsletters as junk — I want to keep those"></textarea>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
+            <a class="btn btn-yes" href="#" onclick="submitFeedback()">Update skill</a>
+            <span id="feedback-status" style="font-size:0.78rem;color:#666"></span>
+          </div>
+        </div>
+        <script>
+        function submitFeedback() {{
+            const feedback = document.getElementById('skill-feedback').value.trim();
+            if (!feedback) {{ alert('Please enter some feedback first.'); return; }}
+            document.getElementById('feedback-status').textContent = 'Updating...';
+            fetch('/update-skill/email_reviewer', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{feedback: feedback}})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.status === 'ok') {{
+                    document.getElementById('feedback-status').textContent = '✓ Skill updated';
+                    document.getElementById('skill-feedback').value = '';
+                }} else {{
+                    document.getElementById('feedback-status').textContent = '✗ ' + data.error;
+                }}
+            }})
+            .catch(() => {{
+                document.getElementById('feedback-status').textContent = '✗ Request failed';
+            }});
+        }}
+        </script>"""
+
     return html_parts
 
 
@@ -538,6 +581,51 @@ def bulk_later():
         if task_id:
             update_pending_status(task_id, 'later')
     return redirect('/email_reviewer?view=actions')
+
+@app.route('/update-skill/<role>', methods=['POST'])
+def update_skill(role):
+    import anthropic
+    from config import ANTHROPIC_API_KEY, MODEL
+
+    data = request.get_json()
+    feedback = data.get('feedback', '').strip()
+    if not feedback:
+        return jsonify({'status': 'error', 'error': 'No feedback provided'})
+
+    # Find the skill file
+    role_skill = Path(__file__).parent.parent / "skills" / "roles" / role
+    # Find the first .md file in the role's skill directory
+    skill_files = list(role_skill.glob("*.md"))
+    if not skill_files:
+        return jsonify({'status': 'error', 'error': 'Skill file not found'})
+    triage_file = skill_files[0]
+
+    current_skill = triage_file.read_text()
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        messages=[{
+            "role": "user",
+            "content": f"""You are updating an agent skill file based on user feedback.
+
+Current skill file:
+{current_skill}
+
+User feedback:
+{feedback}
+
+Rewrite the skill file incorporating the feedback. Keep the YAML frontmatter unchanged.
+Keep the overall structure. Only update the rules and special cases to reflect the feedback.
+Return only the updated skill file content, nothing else."""
+        }]
+    )
+
+    updated_skill = response.content[0].text
+    triage_file.write_text(updated_skill)
+    print(f"[console] skill updated for {role} — feedback: {feedback[:60]}...")
+    return jsonify({'status': 'ok'})
 
 @app.route('/approve-all')
 def approve_all():

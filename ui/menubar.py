@@ -40,6 +40,8 @@ class FlinchApp(rumps.App):
         ]
 
         self._start_tunnel()
+        import time
+        time.sleep(3)
         self.refresh(None)
 
     # -----------------------------------------------------------------------
