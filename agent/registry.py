@@ -29,8 +29,13 @@ def get_role(trigger_type: str) -> dict:
         account_label = "gmail"
 
     skills = _load_skills(role_name)
+    # Only append account label for email_reviewer
+    if role_name == "email_reviewer":
+        name = f"{role_name}_{account_label}"
+    else:
+        name = role_name
     return {
-        "name":       f"{role_name}_{account_label}",
+        "name":       name,
         "persona":    module.PERSONA,
         "tools":      tools_module.TOOLS,
         "registry":   tools_module.TOOL_REGISTRY,
@@ -39,12 +44,20 @@ def get_role(trigger_type: str) -> dict:
     }
 
 def _load_skills(role_name: str) -> str:
-    skills_dir = Path(__file__).parent.parent / "roles" / role_name / "skills"
-    if not skills_dir.exists():
-        return ""
+    base = Path(__file__).parent.parent / "skills"
     parts = []
-    for skill_file in sorted(skills_dir.glob("*.md")):
+    names = []
+
+    for skill_file in sorted((base / "shared").glob("*.md")) if (base / "shared").exists() else []:
         parts.append(skill_file.read_text())
+        names.append(skill_file.stem)
+
+    for skill_file in sorted((base / "roles" / role_name).glob("*.md")) if (base / "roles" / role_name).exists() else []:
+        parts.append(skill_file.read_text())
+        names.append(skill_file.stem)
+
+    if names:
+        print(f"  [skills] loaded {len(names)} skill(s): {', '.join(names)}")
     return "\n\n---\n\n".join(parts)
 
 def register_trigger(trigger_type: str, role_name: str):
