@@ -71,7 +71,6 @@ def get_latest_summary(role):
 def _extract_preview(content):
     lines = [l.strip() for l in content.splitlines() if l.strip()]
 
-    # Find ## Agent summary section and grab meaningful lines after it
     summary_lines = []
     in_summary = False
     for line in lines:
@@ -79,23 +78,23 @@ def _extract_preview(content):
             in_summary = True
             continue
         if in_summary:
-            if line.startswith("##"):
-                break
+            # Skip sub-headings and separators but don't stop
             if line.startswith("---") or line.startswith("#"):
                 continue
-            # Strip markdown bold
-            clean = line.replace("**", "")
-            if len(clean) > 10:
+            clean = line.replace("**", "").replace("*", "").strip()
+            if len(clean) > 10 and not clean.startswith("tokens:") and not clean.startswith("timestamp:"):
                 summary_lines.append(clean[:100])
-            if len(summary_lines) >= 4:
+            if len(summary_lines) >= 3:
                 break
 
     if summary_lines:
-        return " · ".join(summary_lines[:4])
+        return " · ".join(summary_lines)
 
-    # Fallback: first meaningful non-heading line
+    # Fallback: first meaningful non-metadata line
     for line in lines:
-        if not line.startswith("#") and not line.startswith("---") and len(line) > 20:
+        if (not line.startswith("#") and not line.startswith("---")
+                and not line.startswith("type:") and not line.startswith("session_id:")
+                and not line.startswith("payload.") and len(line) > 20):
             return line.replace("**", "")[:120]
     return ""
 
