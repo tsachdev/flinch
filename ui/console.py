@@ -41,23 +41,23 @@ def get_sessions(role, days=7):
     sessions_dir = MEMORY_DIR / "roles" / role / "sessions"
     if not sessions_dir.exists():
         return []
-    cutoff = _now() - timedelta(days=days)
     sessions = []
     for f in sorted(sessions_dir.glob("*.md"), reverse=True):
         try:
-            stem = f.stem  # e.g. 2026-04-07T00-26-31
+            stem = f.stem
             date_part, time_part = stem.split("T")
             time_fixed = time_part.replace("-", ":")
             ts = datetime.fromisoformat(f"{date_part}T{time_fixed}").replace(tzinfo=timezone.utc)
-            if ts >= cutoff:
-                content = f.read_text()
-                sessions.append({
-                    "timestamp": ts.strftime("%b %d %H:%M"),
-                    "preview":   _extract_preview(content),
-                })
+            content = f.read_text()
+            sessions.append({
+                "timestamp": ts.strftime("%b %d %H:%M"),
+                "preview":   _extract_preview(content),
+            })
         except Exception:
             pass
-    return sessions[:20]
+        if len(sessions) >= 5:
+            break
+    return sessions
 
 def get_latest_summary(role):
     summaries_dir = MEMORY_DIR / "roles" / role / "summaries"
@@ -70,15 +70,33 @@ def get_latest_summary(role):
 
 def _extract_preview(content):
     lines = [l.strip() for l in content.splitlines() if l.strip()]
-    for i, line in enumerate(lines):
-        if line.startswith("## Agent summary") and i + 1 < len(lines):
-            # Skip separator lines like ---
-            for j in range(i + 1, min(i + 4, len(lines))):
-                if not lines[j].startswith("---") and not lines[j].startswith("#"):
-                    return lines[j][:120]
+
+    # Find ## Agent summary section and grab meaningful lines after it
+    summary_lines = []
+    in_summary = False
+    for line in lines:
+        if line.startswith("## Agent summary"):
+            in_summary = True
+            continue
+        if in_summary:
+            if line.startswith("##"):
+                break
+            if line.startswith("---") or line.startswith("#"):
+                continue
+            # Strip markdown bold
+            clean = line.replace("**", "")
+            if len(clean) > 10:
+                summary_lines.append(clean[:100])
+            if len(summary_lines) >= 4:
+                break
+
+    if summary_lines:
+        return " · ".join(summary_lines[:4])
+
+    # Fallback: first meaningful non-heading line
     for line in lines:
         if not line.startswith("#") and not line.startswith("---") and len(line) > 20:
-            return line[:120]
+            return line.replace("**", "")[:120]
     return ""
 
 def _status_color(status):
@@ -377,11 +395,11 @@ def _render_summary_tab(role, sessions, summary):
         for s in sessions[:10]:
             sess_html += f"""<div class="session-card">
               <div class="session-ts">{s["timestamp"]}</div>
-              <div class="session-preview">{html.escape(s["preview"] or "—")}</div>
+              <div class="session-preview" style="line-height:1.6">{html.escape(s["preview"] or "—")}</div>
             </div>"""
     else:
         sess_html = '<div class="empty">No sessions this week</div>'
-    html_parts += f'<div><div class="card"><h3>Sessions — last 7 days ({len(sessions)})</h3>{sess_html}</div></div>'
+    html_parts += f'<div><div class="card"><h3>Last 5 sessions</h3>{sess_html}</div></div>'
 
     # Right: parsed summary
     if summary:
