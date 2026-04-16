@@ -24,7 +24,7 @@ For junk: mark as read, no draft, no notification
 
 ## Special cases for Tushar
 - Emails from Walker School (thewalkerschool.org) → updates, mark read only
-- LinkedIn messages from named individuals → treat them as updates
+- LinkedIn messages from named individuals → treat them as promotions, mark as read only
 - LinkedIn Job Alerts (jobalerts-noreply@linkedin.com) → automated alerts, mark as read only
 - Executive recruiter outreach (CTO, VP, C-suite roles) → action-required, not promotions
 - mygate maintenance notices → treat them as notifications
