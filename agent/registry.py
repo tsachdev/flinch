@@ -14,6 +14,10 @@ ROLE_MAX_TOKENS = {
     "market_watcher": 4096,
 }
 
+ROLE_MODELS = {
+    # "market_watcher": "gemma-2-2b-it",  # uncomment to override default
+}
+
 def get_role(trigger_type: str) -> dict:
     role_name = TRIGGER_TO_ROLE.get(trigger_type)
     if not role_name:
@@ -36,6 +40,7 @@ def get_role(trigger_type: str) -> dict:
         "registry":   tools_module.TOOL_REGISTRY,
         "skills":     skills,
         "max_tokens": ROLE_MAX_TOKENS.get(role_name, 1024),
+        "model":      ROLE_MODELS.get(role_name),  # optional override
     }
 
 def _load_skills(role_name: str) -> str:

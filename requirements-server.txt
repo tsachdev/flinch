@@ -13,3 +13,4 @@ googleapis-common-protos==1.73.1
 yfinance
 pytest
 msal
+google-genai

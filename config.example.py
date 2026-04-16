@@ -37,3 +37,11 @@ MARKET_WATCHER_RECIPIENT = "youremail@email.com"
 MICROSOFT_CLIENT_ID  = "your-client-id"
 MICROSOFT_TENANT_ID  = "consumers"
 MICROSOFT_TOKEN_FILE = "microsoft_token.json"
+
+# Model provider config
+GOOGLE_API_KEY = "your-google-api-key-here"
+
+ROLE_PROVIDERS = {
+    "default":        "anthropic",
+    "market_watcher": "google",   # use Gemma for market watcher
+}
