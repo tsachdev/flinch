@@ -23,6 +23,7 @@ For notifications: Summarize all of them into a markdown file, then mark them as
 For junk: mark as read, no draft, no notification
 
 ## Special cases for Tushar
+- Emails from Macy's → delete directly
 - Emails from Walker School (thewalkerschool.org) → updates, mark read only
 - LinkedIn messages from named individuals → treat them as promotions, mark as read only
 - LinkedIn Job Alerts (jobalerts-noreply@linkedin.com) → automated alerts, mark as read only
