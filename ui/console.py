@@ -639,6 +639,20 @@ Return only the updated skill file content, nothing else."""
     updated_skill = response.text
     triage_file.write_text(updated_skill)
     print(f"[console] skill updated for {role} — feedback: {feedback[:60]}...")
+
+    # Auto-commit the skill change
+    import subprocess
+    repo_root = Path(__file__).parent.parent
+    try:
+        subprocess.run(["git", "add", str(triage_file)], cwd=repo_root, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"skill: update {role} triage via console feedback"],
+            cwd=repo_root, check=True
+        )
+        print(f"[console] skill committed to git")
+    except subprocess.CalledProcessError as e:
+        print(f"[console] git commit failed (non-fatal): {e}")
+
     return jsonify({'status': 'ok'})
 
 @app.route('/approve-all')
