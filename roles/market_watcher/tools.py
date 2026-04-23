@@ -86,6 +86,7 @@ def get_earnings_calendar() -> dict:
         return {"error": "No tickers found. Check your portfolio.csv file."}
 
     today = datetime.today().date()
+    lookback  = today - timedelta(days=2)
     lookahead = today + timedelta(days=2)
     upcoming = []
 
@@ -118,10 +119,12 @@ def get_earnings_calendar() -> dict:
                 if ed is None:
                     continue
                 ed_date = ed.date() if hasattr(ed, 'date') else ed
-                if today <= ed_date <= lookahead:
+                if lookback <= ed_date <= lookahead:
+                    bucket = "upcoming" if ed_date >= today else "recent"
                     upcoming.append({
                         "ticker": ticker,
                         "earnings_date": str(ed_date),
+                        "status": bucket,
                     })
                     break
 
@@ -129,11 +132,11 @@ def get_earnings_calendar() -> dict:
             print(f"  [market] could not fetch calendar for {ticker}: {e}")
             continue
 
-    print(f"  [market] {len(upcoming)} upcoming earnings found across {len(watchlist)} watchlist tickers")
+    print(f"  [market] {len(upcoming)} earnings found across {len(watchlist)} watchlist tickers")
     return {
         "total_watchlist": len(watchlist),
         "upcoming_earnings": upcoming,
-        "checked_window": f"{today} to {lookahead}"
+        "checked_window": f"{lookback} to {lookahead}"
     }
 
 @tool("get_stock_metrics")
@@ -229,7 +232,7 @@ def send_email_summary(subject: str, body: str) -> dict:
 TOOLS = [
     {
         "name": "get_earnings_calendar",
-        "description": "Check the Yahoo Finance watchlist CSV for earnings announcements in the next 2 days",
+        "description": "Check the Yahoo Finance watchlist CSV for earnings announcements in the last 2 days and next 2 days",
         "input_schema": {
             "type": "object",
             "properties": {}

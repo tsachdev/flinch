@@ -20,5 +20,18 @@ When sending the email summary:
 - End with a 7-day price movement note for each stock
 - If no upcoming earnings, send a brief "nothing notable this week" summary
 
+## Post-earnings analysis (status: recent)
+For tickers where earnings already happened (status = "recent"):
+- Fetch stock metrics and note actual vs estimated EPS from recent_earnings_surprises
+- Calculate the surprise percentage — beat or miss
+- Note how the stock price has reacted (compare current price to 52-week context)
+- Lead with: "BEAT" or "MISS" in bold
+- Keep to 3 bullet points
+
+## Email structure
+- Section 1: "Upcoming Earnings" — companies reporting in next 2 days
+- Section 2: "Recent Results" — companies that reported in last 2 days
+- If both sections empty, send brief "nothing notable this week"
+
 ## Tone
 Professional but concise. No fluff. Numbers first.
