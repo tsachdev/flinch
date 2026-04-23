@@ -604,31 +604,26 @@ def bulk_later():
 
 @app.route('/update-skill/<role>', methods=['POST'])
 def update_skill(role):
-    import anthropic
-    from config import ANTHROPIC_API_KEY, MODEL
+    import google.genai as genai
+    from config import GOOGLE_API_KEY
 
     data = request.get_json()
     feedback = data.get('feedback', '').strip()
     if not feedback:
         return jsonify({'status': 'error', 'error': 'No feedback provided'})
 
-    # Find the skill file
     role_skill = Path(__file__).parent.parent / "skills" / "roles" / role
-    # Find the first .md file in the role's skill directory
-    skill_files = list(role_skill.glob("*.md"))
+    skill_files = list(role_skill.glob("*.md")) if role_skill.exists() else []
     if not skill_files:
         return jsonify({'status': 'error', 'error': 'Skill file not found'})
-    triage_file = skill_files[0]
 
+    triage_file = skill_files[0]
     current_skill = triage_file.read_text()
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=2048,
-        messages=[{
-            "role": "user",
-            "content": f"""You are updating an agent skill file based on user feedback.
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    response = client.models.generate_content(
+        model="models/gemma-4-26b-a4b-it",
+        contents=f"""You are updating an agent skill file based on user feedback.
 
 Current skill file:
 {current_skill}
@@ -639,10 +634,9 @@ User feedback:
 Rewrite the skill file incorporating the feedback. Keep the YAML frontmatter unchanged.
 Keep the overall structure. Only update the rules and special cases to reflect the feedback.
 Return only the updated skill file content, nothing else."""
-        }]
     )
 
-    updated_skill = response.content[0].text
+    updated_skill = response.text
     triage_file.write_text(updated_skill)
     print(f"[console] skill updated for {role} — feedback: {feedback[:60]}...")
     return jsonify({'status': 'ok'})
