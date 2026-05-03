@@ -45,3 +45,6 @@ ROLE_PROVIDERS = {
     "default":        "anthropic",
     "market_watcher": "google",   # use Gemma for market watcher
 }
+
+# Timezone for console display (e.g. "America/New_York", "Asia/Kolkata", "Europe/London")
+DISPLAY_TIMEZONE = "America/New_York"

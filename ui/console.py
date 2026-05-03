@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, redirect, request
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import sqlite3
 import sys
 import html
@@ -8,6 +9,11 @@ import html
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from eventqueue.bus import get_pending_tasks, update_pending_status
 from roles.email_reviewer.tools import delete_email
+
+try:
+    from config import DISPLAY_TIMEZONE
+except ImportError:
+    DISPLAY_TIMEZONE = "UTC"
 
 app = Flask(__name__)
 DB_PATH   = Path(__file__).parent.parent / "flinch.db"
@@ -21,8 +27,14 @@ ROLE_LABELS = {
     "market_watcher":     "Market",
 }
 
+def _to_local(dt_utc: datetime) -> datetime:
+    """Convert a UTC datetime to the configured display timezone."""
+    if dt_utc.tzinfo is None:
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    return dt_utc.astimezone(ZoneInfo(DISPLAY_TIMEZONE))
+
 def _now():
-    return datetime.now(timezone.utc)
+    return _to_local(datetime.now(timezone.utc))
 
 # ---------------------------------------------------------------------------
 # Data helpers
@@ -50,7 +62,7 @@ def get_sessions(role, days=7):
             ts = datetime.fromisoformat(f"{date_part}T{time_fixed}").replace(tzinfo=timezone.utc)
             content = f.read_text()
             sessions.append({
-                "timestamp": ts.strftime("%b %d %H:%M"),
+                "timestamp": _to_local(ts).strftime("%b %d %H:%M"),
                 "preview":   _extract_preview(content),
             })
         except Exception:
@@ -271,7 +283,7 @@ def render_page(active_tab, content, pending_count):
         f'<a href="/{t}" class="tab{" active" if t == active_tab else ""}">{label}{badge}</a>'
         for t, label, badge in tabs
     )
-    now = _now().strftime("%H:%M UTC")
+    now = _now().strftime("%H:%M %Z")
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -486,7 +498,11 @@ def _render_actions_tab(role, pending):
         sender  = html.escape(t["payload"].get("sender", ""))
         subject = html.escape(t["payload"].get("subject", ""))
         source  = "Microsoft Outlook" if t["task_type"] == "delete_email_microsoft" else "Gmail"
-        date_str = t["created_at"][5:16].replace("T", " ")
+        try:
+            dt = datetime.fromisoformat(t["created_at"].replace("Z", "+00:00"))
+            date_str = _to_local(dt).strftime("%m-%d %H:%M")
+        except Exception:
+            date_str = t["created_at"][5:16].replace("T", " ")
         cards += f"""<div class="pending-card" id="card-{t['id']}">
           <div class="pending-header">
             <input type="checkbox" class="pending-check" id="chk-{t['id']}"
