@@ -4,6 +4,35 @@ from pathlib import Path
 
 MEMORY_DIR = Path(__file__).parent
 
+def _generate_console_summary(role: str, response: str, tool_calls: list) -> str:
+    """Generate a 2-sentence console summary using Gemma 4."""
+    try:
+        import google.genai as genai
+        from config import GOOGLE_API_KEY
+
+        client = genai.Client(api_key=GOOGLE_API_KEY)
+
+        tool_summary = ", ".join(
+            f"{c['tool']}" for c in tool_calls
+        ) if tool_calls else "no tools called"
+
+        prompt = f"""You are summarizing an AI agent session for a console display.
+Write exactly 2 sentences (max 40 words total) summarizing what the agent did.
+Be specific — include numbers and key actions. No preamble, no labels.
+
+Role: {role}
+Tools used: {tool_summary}
+Agent response: {response[:500]}"""
+
+        result = client.models.generate_content(
+            model="models/gemma-4-26b-a4b-it",
+            contents=prompt
+        )
+        return result.text.strip()
+    except Exception as e:
+        print(f"[memory] console summary failed (non-fatal): {e}")
+        return ""
+
 def write_session(result: dict) -> Path:
     role       = result.get("role", "unknown")
     session_id = result["session_id"]
@@ -34,9 +63,16 @@ def write_session(result: dict) -> Path:
             f"→ {json.dumps(call['result'])}"
         )
 
+    console_summary = _generate_console_summary(role, response, tool_calls)
+
     lines += [
         "", "## Agent summary",
         response.strip(),
+    ]
+    if console_summary:
+        lines += ["", "## Console summary", console_summary]
+
+    lines += [
         "", "## Metadata",
         f"tokens: {tokens}",
         f"timestamp: {timestamp}",

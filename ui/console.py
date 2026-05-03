@@ -71,6 +71,20 @@ def get_latest_summary(role):
 def _extract_preview(content):
     lines = [l.strip() for l in content.splitlines() if l.strip()]
 
+    # Prefer Console summary — clean LLM-generated 2-sentence summary
+    in_console = False
+    for line in lines:
+        if line.startswith("## Console summary"):
+            in_console = True
+            continue
+        if in_console:
+            if line.startswith("#") or line.startswith("---"):
+                break
+            clean = line.replace("**", "").replace("*", "").strip()
+            if len(clean) > 10:
+                return clean
+
+    # Fall back to Agent summary extraction
     summary_lines = []
     in_summary = False
     for line in lines:
@@ -78,7 +92,6 @@ def _extract_preview(content):
             in_summary = True
             continue
         if in_summary:
-            # Skip sub-headings and separators but don't stop
             if line.startswith("---") or line.startswith("#"):
                 continue
             clean = line.replace("**", "").replace("*", "").strip()
@@ -90,7 +103,7 @@ def _extract_preview(content):
     if summary_lines:
         return " · ".join(summary_lines)
 
-    # Fallback: first meaningful non-metadata line
+    # Final fallback
     for line in lines:
         if (not line.startswith("#") and not line.startswith("---")
                 and not line.startswith("type:") and not line.startswith("session_id:")
