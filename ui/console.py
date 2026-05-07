@@ -369,7 +369,11 @@ def overview():
     for e in events[:20]:
         color = _role_color(e["type"])
         sc    = _status_color(e["status"])
-        ts    = e["created_at"][11:16]
+        try:
+            dt = datetime.fromisoformat(e["created_at"].replace("Z", "+00:00"))
+            ts = _to_local(dt).strftime("%H:%M")
+        except Exception:
+            ts = e["created_at"][11:16]
         feed_rows += f"""<div class="event-row">
           <div class="dot" style="background:{color}"></div>
           <span class="event-type" style="color:{color}">{e["type"]}</span>
