@@ -31,6 +31,10 @@ Agent response: {response[:500]}"""
         return result.text.strip()
     except Exception as e:
         print(f"[memory] console summary failed (non-fatal): {e}")
+        for line in response.splitlines():
+            clean = line.strip().replace("**", "")
+            if len(clean) > 20 and not clean.startswith("#"):
+                return clean[:150]
         return ""
 
 def write_session(result: dict) -> Path:
