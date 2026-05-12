@@ -43,14 +43,10 @@ def run_agent(event: dict) -> dict:
                         "input":  block["input"],
                         "result": result
                     })
-                    result_json = json.dumps(result)
-                    if len(result_json) > 3000:
-                        # Truncate large tool results to keep context manageable
-                        result_json = result_json[:3000] + '..."}'
                     tool_results.append({
                         "type":        "tool_result",
                         "tool_use_id": block["id"],
-                        "content":     result_json
+                        "content":     json.dumps(_truncate_result(result))
                     })
 
             messages.append({"role": "assistant", "content": response["raw"]})
@@ -69,6 +65,24 @@ def run_agent(event: dict) -> dict:
                 "tool_calls": all_tool_calls,
                 "tokens":     total_tokens
             }
+
+def _truncate_result(result, max_chars=3000):
+    """Truncate large tool results while keeping valid JSON."""
+    if isinstance(result, dict) and "emails" in result:
+        emails = result["emails"]
+        truncated = []
+        total = 0
+        for email in emails:
+            entry = json.dumps(email)
+            if total + len(entry) > max_chars:
+                break
+            truncated.append(email)
+            total += len(entry)
+        return {**result, "emails": truncated, "_truncated": len(emails) - len(truncated)}
+    result_json = json.dumps(result)
+    if len(result_json) > max_chars:
+        return {"_truncated": True, "preview": result_json[:max_chars]}
+    return result
 
 def _build_user_message(event_type: str, payload: dict) -> str:
     lines = [f"Trigger type: {event_type}", "Payload:"]
