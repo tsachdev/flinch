@@ -43,10 +43,14 @@ def run_agent(event: dict) -> dict:
                         "input":  block["input"],
                         "result": result
                     })
+                    result_json = json.dumps(result)
+                    if len(result_json) > 3000:
+                        # Truncate large tool results to keep context manageable
+                        result_json = result_json[:3000] + '..."}'
                     tool_results.append({
                         "type":        "tool_result",
                         "tool_use_id": block["id"],
-                        "content":     json.dumps(result)
+                        "content":     result_json
                     })
 
             messages.append({"role": "assistant", "content": response["raw"]})

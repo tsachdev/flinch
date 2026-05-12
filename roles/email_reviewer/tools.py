@@ -49,7 +49,7 @@ def _get_body(msg):
     text = re.sub(r'[ \t]+', ' ', text)
     text = '\n'.join(line.strip() for line in text.splitlines() if line.strip())
     lines = text.splitlines()[:10]
-    return '\n'.join(lines)[:300]
+    return '\n'.join(lines)[:100]
 
 @tool("get_unread_emails")
 def get_unread_emails() -> dict:
@@ -57,7 +57,7 @@ def get_unread_emails() -> dict:
     results = service.users().messages().list(
         userId='me',
         q='is:unread',
-        maxResults=20
+        maxResults=15
     ).execute()
 
     messages = results.get('messages', [])

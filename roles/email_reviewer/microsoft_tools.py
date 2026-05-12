@@ -80,7 +80,7 @@ def _get_body(message: dict) -> str:
     content = re.sub(r'[ \t]+', ' ', content)
     content = '\n'.join(line.strip() for line in content.splitlines() if line.strip())
     lines = content.splitlines()[:10]
-    return '\n'.join(lines)[:300]
+    return '\n'.join(lines)[:100]
 
 # ── Tools ─────────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ def get_unread_emails() -> dict:
         f"{GRAPH_BASE}/me/mailFolders/inbox/messages"
         "?$filter=isRead eq false"
         "&$select=id,from,subject,receivedDateTime,bodyPreview,body"
-        "&$top=20"
+        "&$top=15"
         "&$orderby=receivedDateTime desc"
     )
     resp = requests.get(url, headers=_headers())
