@@ -16,10 +16,10 @@ Four reference roles are included out of the box:
 
 | Role | Trigger | What it does |
 |---|---|---|
-| `email_reviewer` | Cron (every 2 hours) | Triages Gmail — queues deletions for approval, marks updates read, drafts replies for action items |
+| `email_reviewer` | Cron (every 2 hours) | Triages Gmail and Microsoft Outlook — queues deletions for approval, marks updates read, drafts replies for action items |
 | `support_agent` | Inbound ticket event | Handles customer support tickets, looks up history, sends notifications |
 | `personal_assistant` | Inbound message | Responds to personal messages with context from shared memory |
-| `market_watcher` | Cron (daily 08:00) | Checks earnings calendar for your Yahoo Finance watchlist, emails analysis with P/E, P/S, analyst targets, and 7-day price outlook |
+| `market_watcher` | Cron (daily 08:00) | Checks earnings calendar (±2 days) for your Yahoo Finance watchlist, fetches P/E, P/S, analyst targets, emails analysis |
 
 ---
 
@@ -44,6 +44,8 @@ Event Sources (Gmail, webhooks, cron, messages)
 **Memory** is hybrid: each role maintains its own session logs and daily summaries under `memory/roles/{role}/`, while shared knowledge (customers, contacts, known issues) lives in `memory/shared/entities/`.
 
 **Skills** are plain Markdown files that tell agents how to behave in specific situations — no code changes needed to extend agent behaviour.
+
+**Model abstraction** separates the agent loop from any specific LLM provider. Each role can run on a different model — Claude for nuanced reasoning, Gemma 4 for structured tasks. Provider fallback is built in: if the primary provider fails, Flinch automatically retries with the configured fallback.
 
 ---
 
@@ -94,6 +96,17 @@ Flinch runs three agent roles continuously from a single deployment. Here's what
 [memory] session note → memory/roles/email_reviewer/sessions/2026-04-05T...md
 ```
 
+**Microsoft Outlook reviewer — every 2 hours**
+```
+[agent] session c4d1e2 — role: email_reviewer
+  [llm] provider: google, model: models/gemma-4-26b-a4b-it
+  [tool] get_unread_emails({})
+  [microsoft] fetched 16 unread emails
+  [tool] add_to_pending_queue → 9 newsletters queued for approval
+  [tool] mark_read → 5 updates marked read
+  [memory] session note → memory/roles/email_reviewer/sessions/...md
+```
+
 **Market watcher — every morning at 08:00**
 ```
 [agent] session b7c3d2 — role: market_watcher
@@ -133,6 +146,17 @@ See `docs/gmail-setup.md` for the full walkthrough.
 
 ---
 
+## Microsoft Outlook integration (optional)
+
+Flinch includes a Microsoft Graph API connector for the `email_reviewer` role, enabling it to process Outlook and Office 365 inboxes alongside Gmail.
+
+1. Register an app in the [Azure Portal](https://portal.azure.com) with `Mail.Read`, `Mail.ReadWrite`, `Mail.Send` delegated permissions
+2. Add `MICROSOFT_CLIENT_ID` and `MICROSOFT_TENANT_ID` to `config.py`
+3. Run `python microsoft_auth.py` to complete the device auth flow
+4. A `microsoft_token.json` will be saved — the reviewer will process both inboxes automatically
+
+---
+
 ## Console UI
 
 Flinch includes a web console for monitoring agent activity and approving pending actions.
@@ -142,7 +166,13 @@ python ui/console.py
 # → http://localhost:5001
 ```
 
-Five tabs: Overview, Support, Store, Email, Assistant — each with a Summary and Actions sub-tab. Human-in-the-loop gates (e.g. email deletions) surface here for approval before execution.
+Five tabs: Overview, Email, Support, Assistant, Market — each with a Summary and Actions sub-tab. Features include:
+
+- **Bulk approvals** — select multiple pending emails and delete, keep, or defer in one click
+- **Skill feedback** — update agent behaviour in plain English from the Email tab; Flinch rewrites the skill file automatically
+- **Session summaries** — LLM-generated 2-sentence summary of what each agent did, visible at a glance
+- **Timezone display** — all timestamps shown in your configured local timezone
+- **Nightly digest** — daily email summarising all agent activity across roles
 
 ---
 
@@ -186,11 +216,14 @@ See `docs/deployment.md` for the full setup guide.
 ## Tech stack
 
 - **Python 3.9+**
-- **Anthropic Claude** — agent intelligence (configurable model per role)
+- **Anthropic Claude** — default LLM provider (claude-haiku class)
+- **Google AI Studio / Gemma 4** — alternative provider for structured roles (free tier)
 - **SQLite** — event queue and pending actions store
 - **Flask** — web console
 - **Schedule** — cron-based triggers
-- **Gmail API** — email integration
+- **Gmail API** — Gmail integration
+- **Microsoft Graph API** — Outlook / Office 365 integration
+- **yfinance** — market data for the market_watcher role
 - **Rumps** — macOS menu bar app
 
 ---
@@ -199,14 +232,17 @@ See `docs/deployment.md` for the full setup guide.
 
 ```
 flinch/
-├── agent/          # Agent loop, context builder, skills loader
-├── eventqueue/     # SQLite-backed event bus
-├── gateway/        # Event router
-├── memory/         # Role-scoped and shared entity memory
-├── roles/          # Reference role implementations
-├── skills/         # SKILL.md files per role and shared
-├── ui/             # Console, menu bar app
-├── main.py         # Entry point
+├── agent/
+│   ├── providers/  # LLM provider implementations (Anthropic, Google)
+│   ├── llm.py      # Provider-agnostic model router
+│   └── ...
+├── eventqueue/
+├── gateway/
+├── memory/
+├── roles/
+├── skills/
+├── ui/
+├── main.py
 ├── config.example.py
 └── setup.sh
 ```
@@ -215,11 +251,14 @@ flinch/
 
 ## Roadmap
 
-- [ ] Webhook connector (receive external HTTP events)
-- [ ] Slack connector
-- [ ] Multi-model support per role (swap Claude for other providers)
-- [ ] Role authoring CLI (`flinch new-role`)
+- [x] Multi-model support per role (Anthropic + Google AI Studio / Gemma 4)
+- [x] Microsoft Outlook connector via Graph API
+- [x] Human-in-the-loop approval console with bulk actions
+- [x] Skill feedback form — update agent behaviour without code changes
+- [ ] Webhook connector (receive external HTTP events in real time)
 - [ ] Docker deployment option
+- [ ] Role authoring CLI (`flinch new-role`)
+- [ ] Additional provider support (Ollama, OpenAI)
 
 ---
 
