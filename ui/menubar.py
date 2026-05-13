@@ -15,7 +15,7 @@ STATUS_URL   = "http://localhost:5001/api/status"
 
 class FlinchApp(rumps.App):
     def __init__(self):
-        super().__init__("🦞", quit_button=None)
+        super().__init__("⚡", quit_button=None)
         self._tunnel_proc = None
 
         self.pending_item   = rumps.MenuItem("No pending approvals")
@@ -63,7 +63,7 @@ class FlinchApp(rumps.App):
     def refresh(self, _):
         status  = self._fetch_status()
         pending = status["pending_count"]
-        self.title = f"🦞 {pending}" if pending > 0 else "🦞"
+        self.title = f"⚡ {pending}" if pending > 0 else "⚡"
 
         if pending == 0:
             self.pending_item.title = "No pending approvals"
