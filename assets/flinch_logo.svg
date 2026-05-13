@@ -1,0 +1,29 @@
+<svg viewBox="0 0 420 120" xmlns="http://www.w3.org/2000/svg">
+  <rect width="420" height="120" fill="#1B2A4A" rx="12"/>
+
+  <!-- ECG pulse line -->
+  <polyline 
+    points="20,60 55,60 68,22 82,98 96,35 110,60 160,60 200,60"
+    fill="none" stroke="#5DCAA5" stroke-width="3.5" 
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Dot at end of pulse -->
+  <circle cx="200" cy="60" r="4" fill="#5DCAA5"/>
+
+  <!-- Wordmark -->
+  <text x="220" y="67" 
+    fill="white" 
+    font-family="Arial, Helvetica, sans-serif" 
+    font-size="28" 
+    font-weight="700" 
+    letter-spacing="3">FLINCH</text>
+
+  <!-- Tagline -->
+  <text x="221" y="85"
+    fill="#5DCAA5"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="9"
+    letter-spacing="2"
+    opacity="0.8">REACTIVE AGENT PLATFORM</text>
+
+</svg>
