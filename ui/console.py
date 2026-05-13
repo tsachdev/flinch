@@ -292,7 +292,7 @@ def render_page(active_tab, content, pending_count):
 <meta http-equiv="refresh" content="60">
 </head><body>
 <div class="header">
-  <span style="font-size:1.3rem">🦞</span>
+  <svg viewBox="0 0 50 30" width="28" height="20" style="vertical-align:middle"><polyline points="2,15 10,15 14,4 18,26 22,8 26,15 38,15 48,15" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <h1>Flinch</h1>
   <span class="sub">auto-refresh every 60s &nbsp;·&nbsp; {now}</span>
 </div>

@@ -1,4 +1,4 @@
-<img src="assets/logo.svg" width="360" alt="Flinch"/>
+<img src="assets/flinch_logo.svg" width="360" alt="Flinch"/>
 
 **An open-source implementation of the Reactive agentic pattern.**
 
