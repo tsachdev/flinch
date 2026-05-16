@@ -264,6 +264,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 .stat-num   { font-size: 1.6rem; font-weight: 600; color: #1B2A4A; }
 .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
 .empty { color: var(--muted); font-size: 0.82rem; padding: 20px 0; text-align: center; }
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .header { padding: 12px 16px; }
+  .header h1 { font-size: 1rem; }
+  .header .sub { font-size: 0.7rem; }
+  .tabs { padding: 0 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { padding: 10px 12px; font-size: 0.78rem; white-space: nowrap; }
+  .body { padding: 12px 10px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .subtabs { gap: 0; }
+  .subtab { padding: 8px 12px; }
+  .card { padding: 12px; }
+  .btn { padding: 8px 16px; font-size: 0.82rem; }
+  .actions { gap: 8px; }
+  .pending-header { gap: 8px; }
+  .pending-check { width: 20px; height: 20px; }
+  .bulk-bar { gap: 6px; }
+  .session-preview { font-size: 0.8rem; }
+  .stat-num { font-size: 1.3rem; }
+}
 """
 
 # ---------------------------------------------------------------------------
