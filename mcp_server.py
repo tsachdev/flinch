@@ -52,7 +52,7 @@ async def get_pending_approvals() -> str:
         return "No pending approvals."
     lines = []
     for item in data["pending"]:
-        lines.append(f"[{item['id'][:8]}] {item['sender']} — {item['subject']} ({item['source']}) — {item['reason']}")
+        lines.append(f"[{item['id']}] {item['sender']} — {item['subject']} ({item['source']}) — {item['reason']}")
     return f"{data['count']} pending approvals:\n" + "\n".join(lines)
 
 
