@@ -446,17 +446,29 @@ def _render_summary_tab(role, sessions, summary):
     html_parts += f'<div>{right}</div>'
     html_parts += '</div>'  # closes grid2
 
-    if role == "email_reviewer":
+    SKILL_UI = {
+        "email_reviewer": {
+            "title": "Update email review behaviour",
+            "placeholder": "e.g. Don't flag Chamath newsletters as junk — I want to keep those",
+        },
+        "market_watcher": {
+            "title": "Update market watcher behaviour",
+            "placeholder": "e.g. Also flag ex-dividend dates, not just earnings",
+        },
+    }
+
+    if role in SKILL_UI:
+        ui = SKILL_UI[role]
         html_parts += f"""
         <div class="card" style="margin-top:16px">
-          <h3>Update email review behaviour</h3>
+          <h3>{ui["title"]}</h3>
           <p style="font-size:0.82rem;color:#666;margin-bottom:12px">
             Describe what you want the agent to do differently. The skill file will be updated automatically.
           </p>
           <textarea id="skill-feedback" rows="3"
             style="width:100%;font-size:0.82rem;padding:8px;border:0.5px solid var(--border);
                    border-radius:6px;resize:vertical;font-family:inherit"
-            placeholder="e.g. Don't flag Chamath newsletters as junk — I want to keep those"></textarea>
+            placeholder="{ui["placeholder"]}"></textarea>
           <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
             <a class="btn btn-yes" href="#" onclick="submitFeedback()">Update skill</a>
             <span id="feedback-status" style="font-size:0.78rem;color:#666"></span>
@@ -467,7 +479,7 @@ def _render_summary_tab(role, sessions, summary):
             const feedback = document.getElementById('skill-feedback').value.trim();
             if (!feedback) {{ alert('Please enter some feedback first.'); return; }}
             document.getElementById('feedback-status').textContent = 'Updating...';
-            fetch('/update-skill/email_reviewer', {{
+            fetch('/update-skill/{role}', {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify({{feedback: feedback}})
