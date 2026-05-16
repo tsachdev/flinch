@@ -793,19 +793,6 @@ def dashboard():
         </div>"""
     feed_html = f'<div class="card"><h3>⚡ Recent activity</h3>{feed_rows or "<div class=empty>No activity</div>"}</div>'
 
-    # ── Stats bar ──
-    role_counts = {}
-    for role in ROLES:
-        d = MEMORY_DIR / "roles" / role / "sessions"
-        role_counts[role] = len(list(d.glob(f"{today}*.md"))) if d.exists() else 0
-    stats_html = '<div class="card"><div style="display:flex;gap:0">'
-    for role in ROLES:
-        stats_html += f"""<div class="stat" style="flex:1">
-          <div class="stat-num">{role_counts[role]}</div>
-          <div class="stat-label">{ROLE_LABELS[role]}</div>
-        </div>"""
-    stats_html += '</div></div>'
-
     # ── Skills forms ──
     SKILL_UI = {
         "email_reviewer": {
@@ -891,12 +878,11 @@ def dashboard():
 
     # ── Assemble ──
     content = pending_html
-    content += '<div class="grid2">' + email_panel + market_panel + '</div>'
     content += stocks_html
-    content += stats_html
-    content += feed_html
+    content += '<div class="grid2">' + email_panel + market_panel + '</div>'
     content += skills_html
     content += skills_script
+    content += feed_html
 
     return render_page("dashboard", content, len(pending))
 
