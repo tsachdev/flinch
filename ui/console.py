@@ -887,6 +887,59 @@ def dashboard():
     return render_page("dashboard", content, len(pending))
 
 
+@app.route('/api/email-summary')
+def api_email_summary():
+    summary = get_latest_summary("email_reviewer")
+    sessions = get_sessions("email_reviewer", days=3)
+    return jsonify({
+        "summary": summary["content"] if summary else None,
+        "summary_date": summary["date"] if summary else None,
+        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
+    })
+
+@app.route('/api/market-summary')
+def api_market_summary():
+    summary = get_latest_summary("market_watcher")
+    sessions = get_sessions("market_watcher", days=3)
+    return jsonify({
+        "summary": summary["content"] if summary else None,
+        "summary_date": summary["date"] if summary else None,
+        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
+    })
+
+@app.route('/api/pending')
+def api_pending():
+    pending = get_pending_tasks()
+    items = []
+    for t in pending:
+        items.append({
+            "id": t["id"],
+            "sender": t["payload"].get("sender", ""),
+            "subject": t["payload"].get("subject", ""),
+            "reason": t.get("reason", ""),
+            "source": "outlook" if t["task_type"] == "delete_email_microsoft" else "gmail",
+            "created_at": t["created_at"],
+        })
+    return jsonify({"pending": items, "count": len(items)})
+
+@app.route('/api/watchlist')
+def api_watchlist():
+    import csv
+    portfolio_path = Path(__file__).parent.parent / "portfolio.csv"
+    stocks = []
+    if portfolio_path.exists():
+        with open(portfolio_path) as f:
+            for row in csv.DictReader(f):
+                sym = row.get("Symbol", "").strip()
+                if sym:
+                    stocks.append({
+                        "symbol": sym,
+                        "price": row.get("Current Price", ""),
+                        "change": row.get("Change", ""),
+                    })
+    return jsonify({"stocks": stocks})
+
+
 if __name__ == '__main__':
     print("🦞 Flinch console → http://localhost:5001")
     app.run(host='0.0.0.0', port=5001, debug=False)

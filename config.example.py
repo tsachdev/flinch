@@ -48,3 +48,5 @@ ROLE_PROVIDERS = {
 
 # Timezone for console display (e.g. "America/New_York", "Asia/Kolkata", "Europe/London")
 DISPLAY_TIMEZONE = "America/New_York"
+
+CONSOLE_URL = "http://localhost:5001"  # URL for MCP server to reach the Flinch console
