@@ -81,6 +81,32 @@ You should see:
 
 ---
 
+## Docker quickstart
+
+If you prefer containers over a local Python install:
+
+```bash
+# 1. Clone
+git clone https://github.com/tsachdev/flinch.git
+cd flinch
+
+# 2. Configure
+cp config.example.py config.py
+# Edit config.py — add your API keys
+
+# 3. Authenticate (one-time, requires Python locally)
+pip install google-auth-oauthlib msal
+python gmail_auth.py          # Opens browser — authorize Gmail access
+python microsoft_auth.py      # Device auth flow for Outlook (optional)
+
+# 4. Start
+docker compose up
+```
+
+The console is at `http://localhost:5001`. Both the agent loop and console run as separate containers sharing the same data directory.
+
+---
+
 ## See it in action
 
 Flinch runs three agent roles continuously from a single deployment. Here's what a typical day looks like.
@@ -157,6 +183,21 @@ Flinch includes a Microsoft Graph API connector for the `email_reviewer` role, e
 
 ---
 
+## Dashboard
+
+Flinch includes a My-Yahoo-style dashboard at `localhost:5001/dashboard` — everything on one page:
+
+- **Pending approvals** — count with tap-to-review link
+- **Watchlist** — portfolio tickers with live prices, linked to Yahoo Finance
+- **Email summary** — latest email reviewer summary and session previews
+- **Market summary** — latest market watcher summary and session previews
+- **Skill tuning** — update both email and market agent behaviour inline
+- **Activity feed** — recent queue events across all roles
+
+The dashboard is fully responsive — works on mobile browsers when accessed over WiFi or a tunnel.
+
+---
+
 ## Console UI
 
 Flinch includes a web console for monitoring agent activity and approving pending actions.
@@ -168,9 +209,11 @@ python ui/console.py
 
 Five tabs: Overview, Email, Support, Assistant, Market — each with a Summary and Actions sub-tab. Features include:
 
+- **Dashboard** — single-page overview of all agents at `/dashboard`
 - **Bulk approvals** — select multiple pending emails and delete, keep, or defer in one click
-- **Skill feedback** — update agent behaviour in plain English from the Email tab; Flinch rewrites the skill file automatically
+- **Skill feedback** — update agent behaviour in plain English from the Email or Market tab; Flinch rewrites the skill file automatically
 - **Session summaries** — LLM-generated 2-sentence summary of what each agent did, visible at a glance
+- **Responsive design** — works on mobile browsers; access from your phone over WiFi
 - **Timezone display** — all timestamps shown in your configured local timezone
 - **Nightly digest** — daily email summarising all agent activity across roles
 
@@ -185,6 +228,47 @@ python ui/menubar.py
 ```
 
 To auto-start on login, configure a launchd agent pointing at `ui/menubar.py`. See `docs/menubar-setup.md`.
+
+---
+
+## Claude Desktop integration (MCP)
+
+Flinch includes an MCP server that lets you interact with your agents directly from Claude Desktop. Ask "any pending approvals?" or "what's in my watchlist?" and Claude calls your live Flinch data.
+
+**Setup:**
+
+1. Install dependencies in your Flinch venv:
+```bash
+   pip install "mcp[cli]" httpx
+```
+
+2. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+   {
+     "mcpServers": {
+       "flinch": {
+         "command": "/path/to/flinch/venv/bin/python",
+         "args": ["/path/to/flinch/mcp_server.py"]
+       }
+     }
+   }
+```
+
+3. Restart Claude Desktop.
+
+**Available tools:**
+
+| Tool | What it does |
+|---|---|
+| `get_email_summary` | Latest email review summary and session activity |
+| `get_market_summary` | Latest market watcher summary and earnings info |
+| `get_pending_approvals` | List pending email deletions with sender/subject |
+| `get_watchlist` | Portfolio tickers with current prices and changes |
+| `approve_email` | Approve a pending deletion by task ID |
+| `reject_email` | Keep an email (reject deletion) by task ID |
+| `update_skill` | Change agent behaviour via natural language feedback |
+
+The MCP server connects to the Flinch console at `localhost:5001` via the SSH tunnel, so the console must be running.
 
 ---
 
@@ -225,6 +309,8 @@ See `docs/deployment.md` for the full setup guide.
 - **Microsoft Graph API** — Outlook / Office 365 integration
 - **yfinance** — market data for the market_watcher role
 - **Rumps** — macOS menu bar app
+- **MCP (Model Context Protocol)** — Claude Desktop integration
+- **httpx** — async HTTP client for MCP server
 
 ---
 
@@ -255,10 +341,15 @@ flinch/
 - [x] Microsoft Outlook connector via Graph API
 - [x] Human-in-the-loop approval console with bulk actions
 - [x] Skill feedback form — update agent behaviour without code changes
+- [x] Docker deployment
+- [x] Claude Desktop integration via MCP server
+- [x] My-Yahoo-style dashboard — all agents on one page
+- [x] Responsive mobile console
+- [x] Stock watchlist with live prices on dashboard
 - [ ] Webhook connector (receive external HTTP events in real time)
-- [ ] Docker deployment option
 - [ ] Role authoring CLI (`flinch new-role`)
 - [ ] Additional provider support (Ollama, OpenAI)
+- [ ] Native macOS app packaging
 
 ---
 
