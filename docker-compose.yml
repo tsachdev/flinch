@@ -1,0 +1,21 @@
+services:
+  agent:
+    build: .
+    container_name: flinch-agent
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  console:
+    build: .
+    container_name: flinch-console
+    restart: unless-stopped
+    command: python ui/console.py
+    ports:
+      - "5002:5001"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
