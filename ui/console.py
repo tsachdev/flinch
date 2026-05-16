@@ -292,6 +292,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 
 def render_page(active_tab, content, pending_count):
     tabs = [
+        ("dashboard",         "Dashboard",  ""),
         ("overview",          "Overview",   ""),
         ("support_agent",     "Support",    ""),
         ("email_reviewer",    "Email",
@@ -729,6 +730,175 @@ def approve_all():
         except Exception as e:
             print(f"[console] bulk delete error: {e}")
     return redirect('/email_reviewer?view=actions')
+
+
+@app.route('/dashboard')
+def dashboard():
+    pending  = get_pending_tasks()
+    events   = get_queue_events(15)
+    today    = _now().strftime("%Y-%m-%d")
+
+    # ── Pending banner ──
+    if pending:
+        pending_html = (
+            f'<a href="/email_reviewer?view=actions" style="text-decoration:none">'
+            f'<div class="card" style="background:#FDF3EB;border-color:#D85A30">'
+            f'<div style="display:flex;align-items:center;gap:12px">'
+            f'<span style="font-size:1.8rem;font-weight:700;color:#D85A30">{len(pending)}</span>'
+            f'<div><div style="font-weight:600;color:#D85A30">Pending approvals</div>'
+            f'<div style="font-size:0.78rem;color:#888">Tap to review and approve</div></div>'
+            f'</div></div></a>'
+        )
+    else:
+        pending_html = (
+            '<div class="card" style="background:#EEFBF5;border-color:#0f6e56">'
+            '<div style="font-weight:600;color:#0f6e56">✓ No pending approvals</div></div>'
+        )
+
+    # ── Summaries for each role ──
+    def role_panel(role, label, icon):
+        summary  = get_latest_summary(role)
+        sessions = get_sessions(role, days=3)
+        parts = f'<div class="card"><h3>{icon} {label}</h3>'
+        if summary:
+            parsed = _render_summary_md(summary["content"])
+            parts += parsed or '<div class="empty">Summary is empty.</div>'
+            parts += f'<div style="font-size:0.7rem;color:var(--muted);margin-top:8px">{summary["date"]}</div>'
+        elif sessions:
+            parts += f'<div class="session-preview">{html.escape(sessions[0]["preview"] or "—")}</div>'
+        else:
+            parts += '<div class="empty">No data yet</div>'
+        parts += f'<div style="margin-top:8px"><a href="/{role}" style="font-size:0.78rem;color:#185fa5">View details →</a></div>'
+        parts += '</div>'
+        return parts
+
+    email_panel  = role_panel("email_reviewer", "Email Review", "📬")
+    market_panel = role_panel("market_watcher", "Market Watch", "📈")
+
+    # ── Activity feed (compact) ──
+    feed_rows = ""
+    for e in events[:10]:
+        color = _role_color(e["type"])
+        sc    = _status_color(e["status"])
+        try:
+            dt = datetime.fromisoformat(e["created_at"].replace("Z", "+00:00"))
+            ts = _to_local(dt).strftime("%H:%M")
+        except Exception:
+            ts = e["created_at"][11:16]
+        feed_rows += f"""<div class="event-row">
+          <div class="dot" style="background:{color}"></div>
+          <span class="event-type" style="color:{color}">{e["type"]}</span>
+          <span class="event-status" style="color:{sc}">{e["status"]}</span>
+          <span class="event-time">{ts}</span>
+        </div>"""
+    feed_html = f'<div class="card"><h3>⚡ Recent activity</h3>{feed_rows or "<div class=empty>No activity</div>"}</div>'
+
+    # ── Stats bar ──
+    role_counts = {}
+    for role in ROLES:
+        d = MEMORY_DIR / "roles" / role / "sessions"
+        role_counts[role] = len(list(d.glob(f"{today}*.md"))) if d.exists() else 0
+    stats_html = '<div class="card"><div style="display:flex;gap:0">'
+    for role in ROLES:
+        stats_html += f"""<div class="stat" style="flex:1">
+          <div class="stat-num">{role_counts[role]}</div>
+          <div class="stat-label">{ROLE_LABELS[role]}</div>
+        </div>"""
+    stats_html += '</div></div>'
+
+    # ── Skills forms ──
+    SKILL_UI = {
+        "email_reviewer": {
+            "title": "✏️ Update email behaviour",
+            "placeholder": "e.g. Don't flag Chamath newsletters as junk",
+        },
+        "market_watcher": {
+            "title": "✏️ Update market behaviour",
+            "placeholder": "e.g. Also flag ex-dividend dates",
+        },
+    }
+    skills_html = '<div class="grid2">'
+    for role_key, ui in SKILL_UI.items():
+        field_id = f"skill-fb-{role_key}"
+        status_id = f"fb-status-{role_key}"
+        skills_html += f"""<div class="card">
+          <h3>{ui["title"]}</h3>
+          <textarea id="{field_id}" rows="2"
+            style="width:100%;font-size:0.82rem;padding:8px;border:0.5px solid var(--border);
+                   border-radius:6px;resize:vertical;font-family:inherit"
+            placeholder="{ui["placeholder"]}"></textarea>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
+            <a class="btn btn-yes" href="#" onclick="submitSkill('{role_key}')">Update</a>
+            <span id="{status_id}" style="font-size:0.78rem;color:#666"></span>
+          </div>
+        </div>"""
+    skills_html += '</div>'
+
+    skills_script = """
+    <script>
+    function submitSkill(role) {
+        const fb = document.getElementById('skill-fb-' + role);
+        const st = document.getElementById('fb-status-' + role);
+        if (!fb.value.trim()) { alert('Please enter some feedback first.'); return; }
+        st.textContent = 'Updating...';
+        fetch('/update-skill/' + role, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({feedback: fb.value.trim()})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') { st.textContent = '✓ Updated'; fb.value = ''; }
+            else { st.textContent = '✗ ' + data.error; }
+        })
+        .catch(() => { st.textContent = '✗ Request failed'; });
+    }
+    </script>"""
+
+    # ── Watchlist ──
+    import csv
+    portfolio_path = Path(__file__).parent.parent / "portfolio.csv"
+    stocks_html = '<div class="card"><h3>📊 Watchlist</h3><div style="display:flex;flex-wrap:wrap;gap:8px">'
+    if portfolio_path.exists():
+        with open(portfolio_path) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                sym = row.get("Symbol", "").strip()
+                price = row.get("Current Price", "")
+                change = row.get("Change", "")
+                if not sym:
+                    continue
+                try:
+                    chg = float(change)
+                    color = "#0f6e56" if chg >= 0 else "#a32d2d"
+                    arrow = "▲" if chg >= 0 else "▼"
+                    chg_str = f'{arrow} {abs(chg):.2f}'
+                except (ValueError, TypeError):
+                    color = "#888"
+                    chg_str = ""
+                stocks_html += (
+                    f'<a href="https://finance.yahoo.com/quote/{sym}" target="_blank" '
+                    f'style="text-decoration:none;border:0.5px solid var(--border);border-radius:8px;'
+                    f'padding:8px 12px;background:var(--card);display:inline-block;min-width:100px">'
+                    f'<div style="font-size:0.78rem;font-weight:600;color:#1B2A4A">{sym}</div>'
+                    f'<div style="font-size:0.88rem;font-weight:500">${price}</div>'
+                    f'<div style="font-size:0.72rem;color:{color}">{chg_str}</div>'
+                    f'</a>'
+                )
+    else:
+        stocks_html += '<div class="empty">No portfolio.csv found</div>'
+    stocks_html += '</div></div>'
+
+    # ── Assemble ──
+    content = pending_html
+    content += '<div class="grid2">' + email_panel + market_panel + '</div>'
+    content += stocks_html
+    content += stats_html
+    content += feed_html
+    content += skills_html
+    content += skills_script
+
+    return render_page("dashboard", content, len(pending))
 
 
 if __name__ == '__main__':
