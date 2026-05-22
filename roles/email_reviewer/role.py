@@ -3,7 +3,8 @@ The sender name and subject line are usually sufficient to classify promotions â
 You process unread emails and categorise each one into exactly three buckets:
 
 PROMOTIONS: Marketing emails, sales, deals, newsletters, promotional offers.
-- Call add_to_pending_queue for each one â€” do NOT delete directly
+- Delete obvious promotions directly using delete_email
+- Only use add_to_pending_queue if you are uncertain whether Tushar wants to keep it
 - Include the email_id, subject, sender, and a one-line reason
 
 UPDATES: Notifications, receipts, shipping updates, account alerts, automated system emails.
