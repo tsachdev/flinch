@@ -47,16 +47,18 @@ def start_scheduler():
     schedule.every().day.at("23:59").do(
         lambda: enqueue("cron", "scheduler", {"job": "daily_summary"})
     )
-    schedule.every(2).hours.do(
-        lambda: enqueue("cron", "scheduler", {"job": "email_review"})
-    )
+    # Email review — 11am, 3pm, 7pm ET (= 15:00, 19:00, 23:00 UTC)
+    for t in ["15:00", "19:00", "23:00"]:
+        schedule.every().day.at(t).do(
+            lambda: enqueue("cron", "scheduler", {"job": "email_review"})
+        )
+        schedule.every().day.at(t).do(
+            lambda: enqueue("microsoft_email", "scheduler", {"job": "email_review_microsoft"})
+        )
     schedule.every().day.at("08:00").do(
         lambda: enqueue("market_event", "scheduler", {"job": "market_watch"})
     )
-    schedule.every(2).hours.do(
-        lambda: enqueue("microsoft_email", "scheduler", {"job": "email_review_microsoft"})
-    )
-    print("[scheduler] daily summary at 23:59, email review every 2 hours (Gmail + Microsoft), market watch at 08:00")
+    print("[scheduler] daily summary at 23:59, email review at 11am/3pm/7pm ET, market watch at 08:00")
 
 if __name__ == "__main__":
     print("\n🦞 Flinch starting...\n")
