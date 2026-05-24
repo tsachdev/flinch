@@ -99,7 +99,7 @@ class FlinchApp(rumps.App):
     def _start_tunnel(self):
         try:
             self._tunnel_proc = subprocess.Popen(
-                ["ssh", "-N", "-L", "5001:localhost:5001", SERVER_HOST],
+                ["ssh", "-N", "-L", "0.0.0.0:5001:localhost:5001", SERVER_HOST],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

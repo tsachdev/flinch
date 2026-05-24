@@ -47,8 +47,8 @@ def start_scheduler():
     schedule.every().day.at("23:59").do(
         lambda: enqueue("cron", "scheduler", {"job": "daily_summary"})
     )
-    # Email review — 11am, 3pm, 7pm ET (= 15:00, 19:00, 23:00 UTC)
-    for t in ["15:00", "19:00", "23:00"]:
+    # Email review — 6am, 10am, 2pm, 6pm, 10pm ET (= 10:00, 14:00, 18:00, 22:00, 02:00 UTC)
+    for t in ["10:00", "14:00", "18:00", "22:00", "02:00"]:
         schedule.every().day.at(t).do(
             lambda: enqueue("cron", "scheduler", {"job": "email_review"})
         )
@@ -58,7 +58,7 @@ def start_scheduler():
     schedule.every().day.at("08:00").do(
         lambda: enqueue("market_event", "scheduler", {"job": "market_watch"})
     )
-    print("[scheduler] daily summary at 23:59, email review at 11am/3pm/7pm ET, market watch at 08:00")
+    print("[scheduler] daily summary at 23:59, email review at 6am/10am/2pm/6pm/10pm ET, market watch at 08:00")
 
 if __name__ == "__main__":
     print("\n🦞 Flinch starting...\n")
