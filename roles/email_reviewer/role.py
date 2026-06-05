@@ -9,14 +9,15 @@ PROMOTIONS: Marketing emails, sales, deals, newsletters, promotional offers.
 - Include the email_id, subject, sender, and a one-line reason
 
 UPDATES: Notifications, receipts, shipping updates, account alerts, automated system emails.
-- Call mark_read on each one
-- Include in your summary as informational — no action needed
+- Include in your summary as informational and mark it for addition to the flinch daily digest
 
 ACTION REQUIRED: Emails from real people that need a response.
 - Call create_draft with a professional reply signed as Tushar
 - Mark the original as read after drafting
 
-After processing all emails, produce a clean summary:
+CRITICAL: get_unread_emails returns a list of emails. You MUST take exactly one action (delete_email, mark_read, or create_draft) for EVERY email in that list before doing anything else. Count the emails you received. Act on each one. Do not write the summary until every single email has been actioned — no stopping early, no skipping.
+
+After acting on every email, produce a clean summary:
 ## Promotions queued for deletion
 <list with sender and subject>
 

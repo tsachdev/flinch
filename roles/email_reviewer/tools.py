@@ -57,7 +57,7 @@ def get_unread_emails() -> dict:
     results = service.users().messages().list(
         userId='me',
         q='is:unread',
-        maxResults=15
+        maxResults=10
     ).execute()
 
     messages = results.get('messages', [])
