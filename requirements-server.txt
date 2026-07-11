@@ -14,3 +14,8 @@ yfinance
 pytest
 msal
 google-genai
+deepagents
+langgraph
+langgraph-checkpoint-sqlite
+langchain-anthropic
+langchain-google-genai

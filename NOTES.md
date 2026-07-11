@@ -92,7 +92,7 @@ Reading pass over the current codebase, per spec section 5. This is scratch docu
 
 ## config.py vs config.example.py
 
-- Real `config.py` (gitignored, 39 lines) exists locally — not read in detail here since it contains live credentials-adjacent values; `config.example.py` is the template to edit for new flag additions (`AGENT_BACKEND`, `ROLE_PROVIDER_FALLBACK` if missing). Confirmed `ROLE_PROVIDERS` example only sets `default`+`market_watcher`; `ROLE_PROVIDER_FALLBACK` is referenced by `agent/llm.py` but **absent from `config.example.py`** — needs adding.
+- Real `config.py` (gitignored) confirms `ROLE_PROVIDER_FALLBACK = {"google": "anthropic", "anthropic": None}` is a real, live key (just missing from the `config.example.py` template) — production currently runs `email_reviewer` and `market_watcher` on `google` with anthropic as fallback. `config.example.py` needs `ROLE_PROVIDER_FALLBACK` added so new setups match documented behavior, plus the new `AGENT_BACKEND` flag.
 
 ## Open decisions carried into M0+
 
