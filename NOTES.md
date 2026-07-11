@@ -154,6 +154,46 @@ legacy's plain while-loop — not a per-token or multiplicative cost, so it
 shouldn't compound at scale. 7 of 8 fixtures matched exactly; the one
 mismatch is explained above and is not a regression.
 
+## M4 — remaining roles (support_agent, personal_assistant, market_watcher)
+
+`agent_deepagents/loop.py::build_agent()` already handled all four roles
+generically (only email_reviewer gets the add_to_pending_queue swap) — M4
+needed no loop-level code changes, just fixtures + a comparator per role in
+`scripts/shadow_compare.py`.
+
+- **support_agent** and **personal_assistant**: tools are already fully
+  mock/synthetic (no real backend), so fixtures run unmodified — no
+  monkeypatching needed. 2 fixtures each
+  (`tests/fixtures/support_agent/`, `tests/fixtures/personal_assistant/`).
+- **market_watcher**: confirmed no approval step exists in either
+  implementation (`send_email_summary` isn't gated) — no interrupt/
+  checkpoint wiring needed, matching the "don't add approval gating that
+  didn't exist before" instruction. Fixtures fake `get_earnings_calendar`/
+  `get_stock_metrics`/`send_email_summary` (no real yfinance calls, no real
+  email sent). 2 fixtures (earnings-upcoming, no-earnings).
+
+Results (anthropic forced for market_watcher/email_reviewer to avoid
+Google's flaky endpoint — see M2 section above): support_agent 2/2 match,
+personal_assistant 1/2 match + 1 flexible, market_watcher 2/2 match.
+
+One real (non-regression) finding worth a closer look eventually:
+personal_assistant's persona says "For casual messages batch into a digest"
+but `TOOL_REGISTRY` has no digest/batch tool — only `get_contact`,
+`flag_urgent`, `draft_response`. Sampled the *same* legacy implementation
+3x on the casual-friend fixture: 1/3 runs called `draft_response`, 2/3
+didn't. DeepAgents called it 3/3 in the same sample. Since legacy itself
+isn't consistent, this isn't a migration regression — it's a persona/
+tooling gap (no way to actually "batch into a digest") that predates this
+migration and produces genuinely stochastic behavior in both
+implementations. Marked `"flexible": true` on that fixture with this note;
+worth a real fix (either add a digest-queue tool or drop the persona
+line) as a follow-up, but out of scope for Phase 1's migration work.
+
+Full `tests/` suite (both AGENT_BACKEND values load fine; DeepAgents-backed
+role behavior is exercised via the shadow-mode tests, not by flipping the
+env var and re-running the whole suite, since only email_reviewer is wired
+with approval/checkpoint behavior that differs structurally) passes.
+
 ## Open decisions carried into M0+
 
 1. **AGENT_BACKEND dispatch point**: branch inside a thin new `run_agent(event)` wrapper (could live in `agent/loop.py` itself, or a new tiny module) that imports either `agent.loop.run_agent` or `agent_deepagents.loop.run_agent` based on `config.AGENT_BACKEND` — keeps `main.py` untouched.

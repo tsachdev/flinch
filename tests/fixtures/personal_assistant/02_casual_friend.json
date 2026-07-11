@@ -1,0 +1,9 @@
+{
+  "flexible": true,
+  "note": "Verified over repeated runs: legacy itself splits ~1/3 vs 2/3 on whether to call draft_response for a casual message with no matching 'batch into digest' tool in TOOL_REGISTRY -- genuine LLM sampling variance on an ambiguous persona instruction, not a migration-introduced regression. Comparison reports but doesn't hard-fail on split decisions here.",
+  "payload": {
+    "contact_id": "C-118",
+    "relationship": "friend",
+    "message": "Hey! Any interest in grabbing dinner sometime next week? No rush, whenever works."
+  }
+}

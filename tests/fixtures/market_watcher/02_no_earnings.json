@@ -1,0 +1,9 @@
+{
+  "payload": {"job": "market_watch"},
+  "earnings_calendar": {
+    "total_watchlist": 3,
+    "upcoming_earnings": [],
+    "checked_window": "2026-07-09 to 2026-07-13"
+  },
+  "stock_metrics": {}
+}
