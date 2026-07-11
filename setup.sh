@@ -49,7 +49,18 @@ pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 echo "  ✓ Dependencies installed"
 
-# ── 4. Config check ───────────────────────────
+# ── 4. Console frontend ───────────────────────
+echo ""
+echo "→ Building console frontend..."
+if command -v npm &>/dev/null; then
+  (cd console-ui && npm install --silent && npm run build --silent)
+  echo "  ✓ console-ui/dist built"
+else
+  echo "  ⚠️  npm not found — skipping. Install Node.js, then run:"
+  echo "       cd console-ui && npm install && npm run build"
+fi
+
+# ── 5. Config check ───────────────────────────
 echo ""
 echo "→ Checking config..."
 if [ ! -f "config.py" ]; then
@@ -73,7 +84,7 @@ else
   fi
 fi
 
-# ── 5. Database init ──────────────────────────
+# ── 6. Database init ──────────────────────────
 echo ""
 echo "→ Initialising database..."
 if [ -f "flinch.db" ]; then
@@ -86,7 +97,7 @@ print('  ✓ flinch.db created')
 "
 fi
 
-# ── 6. Gmail OAuth (optional) ─────────────────
+# ── 7. Gmail OAuth (optional) ─────────────────
 echo ""
 echo "→ Gmail integration..."
 if [ -f "token.json" ]; then
@@ -101,7 +112,7 @@ else
   echo "     To enable it, follow the Gmail OAuth setup guide in docs/gmail-setup.md"
 fi
 
-# ── 7. Done ───────────────────────────────────
+# ── 8. Done ───────────────────────────────────
 echo ""
 echo "─────────────────────────────────────────────"
 if [ "$CONFIG_NEEDS_SETUP" = true ]; then

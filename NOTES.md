@@ -194,6 +194,59 @@ role behavior is exercised via the shadow-mode tests, not by flipping the
 env var and re-running the whole suite, since only email_reviewer is wired
 with approval/checkpoint behavior that differs structurally) passes.
 
+## M5 — console rebuild
+
+Rebuilt as a Vite + React SPA (`console-ui/`) served as static files by
+Flask (`ui/console.py`), replacing every server-rendered HTML route
+(`render_page`, `role_tab`, `dashboard`, `overview`, the inline CSS, etc.
+— all deleted, not kept for parity).
+
+- **Backend**: `ui/console.py` keeps every mcp_server.py-facing route
+  byte-for-byte contract-compatible (`/api/status`, `/api/email-summary`,
+  `/api/market-summary`, `/api/pending`, `/api/watchlist`,
+  `/update-skill/<role>`, plus the legacy GET `/approve/<id>` `/reject/<id>`
+  `/later/<id>` `/bulk-*` `/approve-all` routes `mcp_server.py`'s
+  `approve_email`/`reject_email` tools call) — only their redirect target
+  changed, from the now-deleted `/email_reviewer?view=actions` page to `/`.
+  New JSON routes added for the SPA: `/api/roles` (overview cards),
+  `/api/roles/<role>/sessions` (session feed + parsed tool-call detail),
+  `/api/pending/<id>/approve|reject` and `/api/pending/bulk` (POST, JSON —
+  same `_execute_approval` helper as the legacy GET routes, so both eras of
+  pending_queue rows are handled identically either way).
+- **"Next scheduled trigger"** is computed from the hardcoded cron times in
+  `main.py::start_scheduler()` (kept in sync by hand — `SCHEDULE_UTC` in
+  console.py). `support_agent`/`personal_assistant` are event-driven (no
+  fixed schedule) and show "Event-driven" instead.
+- **Frontend**: `console-ui/` (Vite + React, no router — one page, tab
+  state). Three surfaces: Overview (role cards + drill-down session feed
+  with expandable tool-call detail), Approvals (actionable cards, bulk
+  select/approve/reject/defer), Skills (plain-English feedback -> SKILL.md
+  rewrite, same 2 roles the old UI exposed this for — email_reviewer and
+  market_watcher). No agent/task/role-creation control anywhere, by
+  design (Phase 2 concern).
+- **Deployment**: `Dockerfile` is now a 2-stage build — `node:20-slim`
+  builds `console-ui/dist`, then the Python stage copies it in.
+  `setup.sh` builds the frontend too (skips gracefully with a warning if
+  `npm` isn't installed, matching the "optional Gmail" pattern already
+  used for missing `credentials.json`).
+- **Verified live** (Flask + built SPA, no dev-server proxy — the actual
+  production serving path) against this machine's real local `flinch.db`/
+  `memory/`: role cards render with correct status/last-run/next-run,
+  approve/reject/defer round-trips against real pending rows (tested with
+  "Later" only — did not click "Delete" against real pending rows, since
+  that calls the real Gmail trash API for legacy rows with no
+  `_thread_id`), session drill-down renders and expands tool-call detail,
+  skills panel renders (didn't submit — submitting triggers a real Gemini
+  call *and* a real `git commit`, unchanged from the legacy implementation
+  I'm reusing here, not something to trigger just to test the UI). Mobile
+  (375px) and dark-mode layouts both checked.
+- Menu bar app (`ui/menubar.py`) untouched — it only calls `/api/status`
+  (contract unchanged) and opens `CONSOLE_URL` in a browser, so it's
+  unaffected by the frontend rewrite.
+- `ui/app.py` is dead code (an earlier console prototype, not referenced
+  by `docker-compose.yml`, `setup.sh`, or anything else) — left alone,
+  out of scope for this migration.
+
 ## Open decisions carried into M0+
 
 1. **AGENT_BACKEND dispatch point**: branch inside a thin new `run_agent(event)` wrapper (could live in `agent/loop.py` itself, or a new tiny module) that imports either `agent.loop.run_agent` or `agent_deepagents.loop.run_agent` based on `config.AGENT_BACKEND` — keeps `main.py` untouched.
