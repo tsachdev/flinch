@@ -135,5 +135,56 @@ class TestParity(unittest.TestCase):
         self.assertEqual(new_result, "anthropic-ok")
 
 
+class TestDeepAgentsMiddlewareFallback(unittest.TestCase):
+    """get_model_and_middleware — the path agent_deepagents/loop.py actually
+    uses, since create_deep_agent's model= rejects a .with_fallbacks()
+    runnable (it isn't a plain BaseChatModel)."""
+
+    def test_middleware_falls_back_on_primary_exception(self):
+        from agent_deepagents import providers
+        from langchain.agents.middleware.types import ModelRequest
+
+        primary = RunnableLambda(lambda x: (_ for _ in ()).throw(TimeoutError("boom")))
+        fallback = RunnableLambda(lambda x: "fallback-ok")
+
+        def fake_init(provider, model, max_tokens):
+            return primary if provider == "anthropic" else fallback
+
+        with patch.dict("agent_deepagents.providers.ROLE_PROVIDERS",
+                        {"default": "anthropic", "test_role": "anthropic"}, clear=True), \
+             patch.dict("agent_deepagents.providers.ROLE_PROVIDER_FALLBACK",
+                        {"anthropic": "google"}, clear=True), \
+             patch("agent_deepagents.providers._init_chat_model", side_effect=fake_init):
+            model, middleware = providers.get_model_and_middleware({"name": "test_role"})
+
+        self.assertEqual(len(middleware), 1)
+
+        def handler(request):
+            return request.model.invoke("hi")
+
+        fake_request = MagicMock(spec=ModelRequest)
+        fake_request.model = model
+        fake_request.override.return_value = MagicMock(model=fallback)
+
+        result = middleware[0].wrap_model_call(fake_request, handler)
+        self.assertEqual(result, "fallback-ok")
+        fake_request.override.assert_called_once_with(model=fallback)
+
+    def test_no_middleware_when_no_fallback_configured(self):
+        from agent_deepagents import providers
+
+        primary = RunnableLambda(lambda x: "primary-ok")
+
+        with patch.dict("agent_deepagents.providers.ROLE_PROVIDERS",
+                        {"default": "anthropic", "test_role": "anthropic"}, clear=True), \
+             patch.dict("agent_deepagents.providers.ROLE_PROVIDER_FALLBACK",
+                        {"anthropic": None}, clear=True), \
+             patch("agent_deepagents.providers._init_chat_model", return_value=primary):
+            model, middleware = providers.get_model_and_middleware({"name": "test_role"})
+
+        self.assertEqual(middleware, [])
+        self.assertIs(model, primary)
+
+
 if __name__ == "__main__":
     unittest.main()

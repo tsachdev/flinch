@@ -605,7 +605,28 @@ def market_tab():    return role_tab("market_watcher")
 
 # ---------------------------------------------------------------------------
 # Approval actions
+#
+# A pending_queue row created by the DeepAgents backend carries a
+# `_thread_id` in its payload (see agent_deepagents/loop.py's
+# add_to_pending_queue replacement) — approving/rejecting it resumes the
+# checkpointed proposal graph, which is what actually runs (or skips) the
+# real delete_email/microsoft delete call. Rows without a `_thread_id`
+# were created by the legacy backend and keep the original direct-call
+# behavior. Same console code path handles both eras' rows.
 # ---------------------------------------------------------------------------
+
+def _execute_approval(task: dict, approved: bool) -> dict:
+    thread_id = task['payload'].get('_thread_id')
+    if thread_id:
+        from agent_deepagents.approval import resume_approval
+        return resume_approval(thread_id, approved=approved)
+    if not approved:
+        return {"status": "rejected"}
+    if task['task_type'] == 'delete_email_microsoft':
+        from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
+        return ms_delete(task['payload']['email_id'])
+    return delete_email(task['payload']['email_id'])
+
 
 @app.route('/approve/<task_id>')
 def approve(task_id):
@@ -613,11 +634,7 @@ def approve(task_id):
     task  = next((t for t in tasks if t['id'] == task_id), None)
     if task:
         try:
-            if task['task_type'] == 'delete_email_microsoft':
-                from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
-                ms_delete(task['payload']['email_id'])
-            else:
-                delete_email(task['payload']['email_id'])
+            _execute_approval(task, approved=True)
         except Exception as e:
             print(f"[console] delete error: {e}")
         update_pending_status(task_id, 'approved')
@@ -625,6 +642,13 @@ def approve(task_id):
 
 @app.route('/reject/<task_id>')
 def reject(task_id):
+    tasks = get_pending_tasks()
+    task  = next((t for t in tasks if t['id'] == task_id), None)
+    if task:
+        try:
+            _execute_approval(task, approved=False)
+        except Exception as e:
+            print(f"[console] reject error: {e}")
     update_pending_status(task_id, 'rejected')
     return redirect('/email_reviewer?view=actions')
 
@@ -642,11 +666,7 @@ def bulk_approve():
         task = next((t for t in tasks if t['id'] == task_id), None)
         if task:
             try:
-                if task['task_type'] == 'delete_email_microsoft':
-                    from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
-                    ms_delete(task['payload']['email_id'])
-                else:
-                    delete_email(task['payload']['email_id'])
+                _execute_approval(task, approved=True)
             except Exception as e:
                 print(f"[console] bulk approve error: {e}")
             update_pending_status(task_id, 'approved')
@@ -656,8 +676,15 @@ def bulk_approve():
 def bulk_reject():
     ids = request.args.get('ids', '').split(',')
     for task_id in ids:
-        if task_id:
-            update_pending_status(task_id, 'rejected')
+        if not task_id: continue
+        tasks = get_pending_tasks()
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if task:
+            try:
+                _execute_approval(task, approved=False)
+            except Exception as e:
+                print(f"[console] bulk reject error: {e}")
+        update_pending_status(task_id, 'rejected')
     return redirect('/email_reviewer?view=actions')
 
 @app.route('/bulk-later')
@@ -725,7 +752,7 @@ Return only the updated skill file content, nothing else."""
 def approve_all():
     for task in get_pending_tasks():
         try:
-            delete_email(task['payload']['email_id'])
+            _execute_approval(task, approved=True)
             update_pending_status(task['id'], 'approved')
         except Exception as e:
             print(f"[console] bulk delete error: {e}")

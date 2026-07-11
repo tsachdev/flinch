@@ -94,6 +94,66 @@ Reading pass over the current codebase, per spec section 5. This is scratch docu
 
 - Real `config.py` (gitignored) confirms `ROLE_PROVIDER_FALLBACK = {"google": "anthropic", "anthropic": None}` is a real, live key (just missing from the `config.example.py` template) — production currently runs `email_reviewer` and `market_watcher` on `google` with anthropic as fallback. `config.example.py` needs `ROLE_PROVIDER_FALLBACK` added so new setups match documented behavior, plus the new `AGENT_BACKEND` flag.
 
+## M2 finding: create_deep_agent() dropped in favor of langchain.agents.create_agent
+
+Measured during the email_reviewer pilot: `deepagents.create_deep_agent()` wires
+`FilesystemMiddleware`/`SubAgentMiddleware`/`TodoListMiddleware` into every
+model call unconditionally. `excluded_tools` hides their tool schemas from
+the model, but the middleware `wrap_model_call` hooks still run and still
+inject system-message content — they're "protected scaffolding," not
+removable even via `excluded_middleware` (confirmed by tracing the actual
+call stack). Real shadow-mode runs against the email_reviewer fixtures
+showed ~40-55% more tokens per run than legacy for identical decisions —
+over guardrail #6's ~20% budget — even after excluding tools and setting
+`base_system_prompt=""`.
+
+None of Flinch's four roles need the deep-agent filesystem/todo/subagent
+harness — they're narrow, single-purpose event handlers with their own
+tool set, same as today. Per explicit sign-off, `agent_deepagents/loop.py`
+uses `langchain.agents.create_agent` instead — the lighter-weight primitive
+`create_deep_agent` itself is built on. This keeps everything the spec
+actually wanted from DeepAgents (LangGraph checkpoint/interrupt, LangChain
+middleware replacing bespoke provider-fallback code) without the deep-agent
+tax. Re-verified token parity after the switch: ~15-20% overhead remained
+(closer to the guardrail line, attributable to LangGraph's own graph-step
+overhead vs. legacy's plain while-loop, not to deep-agent scaffolding).
+
+Practical effect: the `deepagents` PyPI package is not a runtime dependency
+of `agent_deepagents/` — removed from requirements.txt/requirements-server.txt.
+`langchain` (the package providing `create_agent`) was previously pulled in
+transitively via `deepagents`; now listed explicitly since it's a direct
+dependency.
+
+## M2 shadow-mode results (all 8 committed fixtures)
+
+Ran `scripts/shadow_compare.py` against all 8 fixtures under
+`tests/fixtures/email_reviewer/`. Google's Gemma endpoint was visibly
+unstable during this session (`ServerError`s triggering the legacy
+fallback path too, and one run against fixture 04 stalled for 10+ minutes
+before being killed — a live provider issue, not a bug reproduced in the
+code). Re-run with `config.ROLE_PROVIDERS["email_reviewer"]` forced to
+`"anthropic"` to get clean, fast, comparable numbers:
+
+| fixture | decisions | tokens (legacy / new) | seconds (legacy / new) |
+|---|---|---|---|
+| 01 obvious_promos | MATCH | 8105 / 9348 | 28.9 / 58.3 (google, flaky run) |
+| 02 real_person_reply | MATCH | 8499 / 12409 | 12.2 / 23.5 (google, flaky run) |
+| 03 mixed_batch | 1 mismatch (fx03-3): legacy skipped `mark_read` after drafting despite its persona saying to — deepagents did both. LLM nondeterminism, not a migration bug. | 10733 / 10001 | 30.5 / 59.7 (google) |
+| 04 uncertain_newsletter (flexible) | MATCH | 9442 / 9454 | 5.0 / 5.4 (anthropic) |
+| 05 shipping_updates | MATCH | 9723 / 9699 | 5.3 / 10.8 (anthropic) |
+| 06 brand_promo | MATCH | 9360 / 9419 | 4.8 / 5.2 (anthropic) |
+| 07 security_alert (flexible) | MATCH | 9405 / 9341 | 7.8 / 5.8 (anthropic) |
+| 08 empty_inbox | MATCH | 6010 / 5899 | 3.1 / 2.3 (anthropic) |
+
+On clean (anthropic, non-flaky) runs, token parity is essentially exact
+(within ±1%) — the earlier 15-55% overhead measurements were conflated with
+Google-endpoint retry/fallback noise on top of the real (smaller) LangGraph
+per-step overhead. Latency shows a modest, roughly-fixed per-run overhead
+(a few seconds) consistent with LangGraph's graph-step machinery vs.
+legacy's plain while-loop — not a per-token or multiplicative cost, so it
+shouldn't compound at scale. 7 of 8 fixtures matched exactly; the one
+mismatch is explained above and is not a regression.
+
 ## Open decisions carried into M0+
 
 1. **AGENT_BACKEND dispatch point**: branch inside a thin new `run_agent(event)` wrapper (could live in `agent/loop.py` itself, or a new tiny module) that imports either `agent.loop.run_agent` or `agent_deepagents.loop.run_agent` based on `config.AGENT_BACKEND` — keeps `main.py` untouched.

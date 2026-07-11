@@ -1,5 +1,6 @@
 venv/
 flinch.db
+flinch_checkpoints.db
 config.py
 memory/roles/*/sessions/
 memory/roles/*/summaries/

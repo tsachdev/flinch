@@ -1,0 +1,39 @@
+{
+  "emails": [
+    {
+      "id": "fx03-1",
+      "from": "sale@shoeoutlet.example.com",
+      "subject": "Flash sale: buy one get one free",
+      "date": "Sat, 11 Jul 2026 10:00:00 -0400",
+      "preview": "This weekend only. Free shipping on all orders over $50."
+    },
+    {
+      "id": "fx03-2",
+      "from": "receipts@onlinestore.example.com",
+      "subject": "Your order #48213 has shipped",
+      "date": "Sat, 11 Jul 2026 09:45:00 -0400",
+      "preview": "Your package is on its way and should arrive by Wednesday. Track your shipment here."
+    },
+    {
+      "id": "fx03-3",
+      "from": "priya.natarajan@example.com",
+      "subject": "Following up on the proposal",
+      "date": "Sat, 11 Jul 2026 09:30:00 -0400",
+      "preview": "Wanted to check in on the proposal I sent last week. Any thoughts or questions before Friday's meeting?"
+    },
+    {
+      "id": "fx03-4",
+      "from": "specialoffers@travelbooking.example.com",
+      "subject": "Prices are dropping for your saved destinations",
+      "date": "Sat, 11 Jul 2026 09:00:00 -0400",
+      "preview": "We noticed lower fares to places you've searched. Book now before prices go back up."
+    },
+    {
+      "id": "fx03-5",
+      "from": "billing@utilitycompany.example.com",
+      "subject": "Your monthly statement is ready",
+      "date": "Sat, 11 Jul 2026 08:30:00 -0400",
+      "preview": "Your latest statement is now available to view online. Amount due: $84.12."
+    }
+  ]
+}

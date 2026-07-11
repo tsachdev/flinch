@@ -1,0 +1,13 @@
+{
+  "flexible": true,
+  "note": "Ambiguous — an LLM could reasonably treat this as an informational update (mark read) or as something to flag. Comparison reports but doesn't hard-fail on split decisions here.",
+  "emails": [
+    {
+      "id": "fx07-1",
+      "from": "security@accountservices.example.com",
+      "subject": "New sign-in to your account",
+      "date": "Sat, 11 Jul 2026 13:00:00 -0400",
+      "preview": "We noticed a new sign-in from a device in your usual location. If this was you, no action is needed."
+    }
+  ]
+}
