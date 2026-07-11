@@ -247,6 +247,50 @@ Flask (`ui/console.py`), replacing every server-rendered HTML route
   by `docker-compose.yml`, `setup.sh`, or anything else) — left alone,
   out of scope for this migration.
 
+## M6 — cutover
+
+- `config.example.py`'s `AGENT_BACKEND` default flipped to `"deepagents"`.
+  This only changes what a *new* `config.py` gets on first copy — doesn't
+  touch anyone's existing, gitignored `config.py` (this machine's included),
+  so nothing about an already-running Flinch instance changes just from
+  this commit landing.
+- README: Architecture/Tech stack/Project structure sections updated to
+  reflect LangChain/LangGraph in the stack and the new `agent_deepagents/`
+  + `console-ui/` directories; Console UI section rewritten for the actual
+  3-surface SPA (the old text described the retired 5-tab Flask UI and a
+  `/dashboard` route that no longer exists); Roadmap checked off the
+  migration.
+- **Fixed a pre-existing bug that blocked the "fresh clone works out of
+  the box" acceptance criterion**: `setup.sh` called
+  `from eventqueue.bus import init_db; init_db()`, but the real function
+  is `init_queue()` — `init_db` never existed. This predates Phase 1
+  entirely (verified against the pre-migration `setup.sh`), but a fresh
+  clone couldn't get through `setup.sh` at all without it, so fixed as
+  part of proving this milestone's acceptance criterion.
+- **Verified end-to-end on a genuine fresh clone** (not just this dev
+  checkout): `git clone` into a scratch dir on the `phase1-deepagents`
+  branch, ran `./setup.sh` unmodified (Python venv, pip install, frontend
+  build, `config.py` from template, `flinch.db` init) start to finish
+  with no manual intervention beyond filling in placeholder API keys.
+  `python main.py` starts cleanly with the new `AGENT_BACKEND=deepagents`
+  default (handlers register, scheduler starts, no crash) — confirmed the
+  M0 no-op path isn't accidentally still active. Then flipped
+  `config.py` to `AGENT_BACKEND=legacy` on the *same* clone and confirmed
+  it starts identically — the rollback path is real, not just
+  theoretical. Console (`ui/console.py`) also verified serving the
+  frontend built by `setup.sh` on this fresh clone, `/api/roles` returning
+  a correct empty-state response for a brand-new install.
+- **Not done by me, and shouldn't be**: the real droplet cutover and the
+  spec's 48-72 hour production monitoring window (UAT checklist, "After
+  M6") — that needs Tushar's own access to the production server and is
+  exactly the kind of hard-to-reverse, shared-system action this workflow
+  defers to explicit human sign-off for. Same for tagging a release and
+  merging `phase1-deepagents` into `main` — left for explicit approval
+  rather than done unilaterally.
+- Legacy `agent/` is untouched and fully intact — nothing deleted. Per the
+  spec's rollback plan, it should stay that way for at least one release
+  cycle after the real cutover, and only be removed on explicit sign-off.
+
 ## Open decisions carried into M0+
 
 1. **AGENT_BACKEND dispatch point**: branch inside a thin new `run_agent(event)` wrapper (could live in `agent/loop.py` itself, or a new tiny module) that imports either `agent.loop.run_agent` or `agent_deepagents.loop.run_agent` based on `config.AGENT_BACKEND` — keeps `main.py` untouched.

@@ -32,20 +32,26 @@ Event Sources (Gmail, webhooks, cron, messages)
         ↓
     [ Gateway ]         Routes events to the correct role handler
         ↓
-  [ Agent Loop ]        Role-aware, long-running sessions per event
-        ↓
-  [ Tool Layer ]        Role-specific tools (Gmail, notifications, lookups)
+  [ Agent Loop ]        LangChain/LangGraph agent per event (agent_deepagents/)
+        ↓                     ↓
+  [ Tool Layer ]        [ Checkpoint/interrupt ]  human-in-the-loop approvals,
+  Role-specific tools    durable across restarts (langgraph-checkpoint-sqlite)
+  (Gmail, lookups, ...)
         ↓
   [ Memory System ]     Role-scoped session notes + shared entity memory
         ↓
   [ Skills System ]     SKILL.md files loaded per role at runtime
+        ↓
+     [ Console ]        React SPA — activity, approvals, skill tuning
 ```
 
-**Memory** is hybrid: each role maintains its own session logs and daily summaries under `memory/roles/{role}/`, while shared knowledge (customers, contacts, known issues) lives in `memory/shared/entities/`.
+**Agent loop** runs on LangChain (`langchain.agents.create_agent`) with a LangGraph SQLite checkpointer backing the approval flow — a pending action (e.g. an uncertain email marked for deletion) is a paused graph, not just a database row, so it survives a process restart and resumes exactly where it left off on approve/reject. An older, hand-rolled agent loop (`agent/`) is kept as a feature-flagged (`AGENT_BACKEND`) rollback path.
+
+**Memory** is hybrid: each role maintains its own session logs and daily summaries under `memory/roles/{role}/`, while shared knowledge (customers, contacts, known issues) lives in `memory/shared/entities/`. Unchanged in format regardless of which agent backend is active — plain Markdown, readable with `cat`, diffable with `git diff`.
 
 **Skills** are plain Markdown files that tell agents how to behave in specific situations — no code changes needed to extend agent behaviour.
 
-**Model abstraction** separates the agent loop from any specific LLM provider. Each role can run on a different model — Claude for nuanced reasoning, Gemma 4 for structured tasks. Provider fallback is built in: if the primary provider fails, Flinch automatically retries with the configured fallback.
+**Model abstraction** separates the agent loop from any specific LLM provider. Each role can run on a different model — Claude for nuanced reasoning, Gemma 4 for structured tasks. Provider fallback is built in via LangChain middleware: if the primary provider fails, Flinch automatically retries with the configured fallback.
 
 ---
 
@@ -183,36 +189,27 @@ Flinch includes a Microsoft Graph API connector for the `email_reviewer` role, e
 
 ---
 
-## Dashboard
-
-Flinch includes a My-Yahoo-style dashboard at `localhost:5001/dashboard` — everything on one page:
-
-- **Pending approvals** — count with tap-to-review link
-- **Watchlist** — portfolio tickers with live prices, linked to Yahoo Finance
-- **Email summary** — latest email reviewer summary and session previews
-- **Market summary** — latest market watcher summary and session previews
-- **Skill tuning** — update both email and market agent behaviour inline
-- **Activity feed** — recent queue events across all roles
-
-The dashboard is fully responsive — works on mobile browsers when accessed over WiFi or a tunnel.
-
----
-
 ## Console UI
 
-Flinch includes a web console for monitoring agent activity and approving pending actions.
+Flinch includes a console — a React single-page app (`console-ui/`) served as static files by a small Flask API (`ui/console.py`).
 
 ```bash
+# Console frontend is pre-built by setup.sh / the Docker image.
+# To rebuild after a UI change:
+cd console-ui && npm install && npm run build
+
 python ui/console.py
 # → http://localhost:5001
 ```
 
-Five tabs: Overview, Email, Support, Assistant, Market — each with a Summary and Actions sub-tab. Features include:
+Three surfaces, one page:
 
-- **Dashboard** — single-page overview of all agents at `/dashboard`
-- **Bulk approvals** — select multiple pending emails and delete, keep, or defer in one click
-- **Skill feedback** — update agent behaviour in plain English from the Email or Market tab; Flinch rewrites the skill file automatically
-- **Session summaries** — LLM-generated 2-sentence summary of what each agent did, visible at a glance
+- **Overview** — a card per role (status, last run, next scheduled trigger, one-line summary); click through to a reverse-chronological run history with expandable tool-call detail
+- **Approvals** — pending actions (email deletions, etc.) as actionable cards: approve, reject, or defer, individually or in bulk. Backed by LangGraph checkpoint/interrupt, so a pending approval survives a process restart
+- **Skills** — plain-English feedback per role ("stop deleting Nextdoor digests, just mark them read"); Flinch rewrites the corresponding `SKILL.md` automatically
+
+No agent/role/task-creation controls — that's on the roadmap for Phase 2, not this console.
+
 - **Responsive design** — works on mobile browsers; access from your phone over WiFi
 - **Timezone display** — all timestamps shown in your configured local timezone
 - **Nightly digest** — daily email summarising all agent activity across roles
@@ -300,10 +297,12 @@ See `docs/deployment.md` for the full setup guide.
 ## Tech stack
 
 - **Python 3.9+**
+- **LangChain / LangGraph** — agent loop (`langchain.agents.create_agent`) and checkpoint/interrupt-based approvals (`langgraph-checkpoint-sqlite`)
 - **Anthropic Claude** — default LLM provider (claude-haiku class)
 - **Google AI Studio / Gemma 4** — alternative provider for structured roles (free tier)
-- **SQLite** — event queue and pending actions store
-- **Flask** — web console
+- **SQLite** — event queue, pending actions, and (separately) agent checkpoints
+- **Flask** — console API, serving a built React SPA as static files
+- **React + Vite** — console frontend (`console-ui/`)
 - **Schedule** — cron-based triggers
 - **Gmail API** — Gmail integration
 - **Microsoft Graph API** — Outlook / Office 365 integration
@@ -312,22 +311,31 @@ See `docs/deployment.md` for the full setup guide.
 - **MCP (Model Context Protocol)** — Claude Desktop integration
 - **httpx** — async HTTP client for MCP server
 
+An older, hand-rolled agent loop and provider abstraction (`agent/`) is kept as a feature-flagged (`AGENT_BACKEND=legacy`) rollback path — see [NOTES.md](NOTES.md) for the migration rationale and shadow-mode verification.
+
 ---
 
 ## Project structure
 
 ```
 flinch/
-├── agent/
+├── agent/              # legacy agent loop + provider abstraction (rollback path)
 │   ├── providers/  # LLM provider implementations (Anthropic, Google)
 │   ├── llm.py      # Provider-agnostic model router
 │   └── ...
+├── agent_deepagents/    # LangChain/LangGraph agent loop (default backend)
+│   ├── loop.py          # build_agent()/run_agent() per role
+│   ├── providers.py     # LangChain model init + fallback middleware
+│   ├── approval.py       # checkpoint/interrupt approval flow
+│   ├── tools.py          # wraps roles/*/tools.py as LangChain tools
+│   └── checkpointer.py   # langgraph-checkpoint-sqlite setup
 ├── eventqueue/
 ├── gateway/
 ├── memory/
 ├── roles/
 ├── skills/
-├── ui/
+├── ui/                 # console API (Flask)
+├── console-ui/         # console frontend (React + Vite)
 ├── main.py
 ├── config.example.py
 └── setup.sh
@@ -346,8 +354,11 @@ flinch/
 - [x] My-Yahoo-style dashboard — all agents on one page
 - [x] Responsive mobile console
 - [x] Stock watchlist with live prices on dashboard
+- [x] Agent loop migrated to LangChain/LangGraph, checkpoint/interrupt-based approvals
+- [x] Console rebuilt as a React SPA (activity, approvals, skill tuning)
 - [ ] Webhook connector (receive external HTTP events in real time)
 - [ ] Role authoring CLI (`flinch new-role`)
+- [ ] Agent/role construction from the console UI (Phase 2)
 - [ ] Additional provider support (Ollama, OpenAI)
 - [ ] Native macOS app packaging
 

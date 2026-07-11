@@ -91,8 +91,8 @@ if [ -f "flinch.db" ]; then
   echo "  flinch.db already exists — skipping"
 else
   python3 -c "
-from eventqueue.bus import init_db
-init_db()
+from eventqueue.bus import init_queue
+init_queue()
 print('  ✓ flinch.db created')
 "
 fi
