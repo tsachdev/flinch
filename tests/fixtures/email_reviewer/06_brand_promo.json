@@ -1,0 +1,11 @@
+{
+  "emails": [
+    {
+      "id": "fx06-1",
+      "from": "news@bigbrand.example.com",
+      "subject": "Introducing our new summer collection",
+      "date": "Sat, 11 Jul 2026 12:00:00 -0400",
+      "preview": "Check out the new arrivals just in time for summer. Free returns on all orders."
+    }
+  ]
+}

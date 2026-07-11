@@ -1,0 +1,31 @@
+{
+  "payload": {"job": "market_watch"},
+  "earnings_calendar": {
+    "total_watchlist": 3,
+    "upcoming_earnings": [
+      {"ticker": "ACME", "earnings_date": "2026-07-13", "status": "upcoming"}
+    ],
+    "checked_window": "2026-07-09 to 2026-07-13"
+  },
+  "stock_metrics": {
+    "ACME": {
+      "ticker": "ACME",
+      "company_name": "Acme Corp",
+      "current_price": 142.50,
+      "currency": "USD",
+      "fifty_two_week_low": 98.20,
+      "fifty_two_week_high": 155.00,
+      "pe_ratio_trailing": 24.1,
+      "pe_ratio_forward": 21.3,
+      "ps_ratio": 6.2,
+      "analyst_target_mean": 150.0,
+      "analyst_target_low": 130.0,
+      "analyst_target_high": 170.0,
+      "analyst_recommendation": "buy",
+      "number_of_analysts": 18,
+      "revenue_growth": 0.12,
+      "earnings_growth": 0.08,
+      "forward_eps": 6.7
+    }
+  }
+}

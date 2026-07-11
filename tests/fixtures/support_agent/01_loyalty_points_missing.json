@@ -1,0 +1,8 @@
+{
+  "payload": {
+    "ticket_id": "T-9902",
+    "customer_id": "1204",
+    "order_id": "9902",
+    "query": "Customer says their loyalty points never posted for this order even though the order shows as delivered and paid. They'd like the points credited."
+  }
+}

@@ -1,10 +1,10 @@
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, jsonify, redirect, request, send_from_directory
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+import json as json_lib
 import sqlite3
 import sys
-import html
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from eventqueue.bus import get_pending_tasks, update_pending_status
@@ -16,8 +16,9 @@ except ImportError:
     DISPLAY_TIMEZONE = "UTC"
 
 app = Flask(__name__)
-DB_PATH   = Path(__file__).parent.parent / "flinch.db"
-MEMORY_DIR = Path(__file__).parent.parent / "memory"
+DB_PATH        = Path(__file__).parent.parent / "flinch.db"
+MEMORY_DIR     = Path(__file__).parent.parent / "memory"
+FRONTEND_DIST  = Path(__file__).parent.parent / "console-ui" / "dist"
 
 ROLES = ["support_agent", "email_reviewer", "personal_assistant", "market_watcher"]
 ROLE_LABELS = {
@@ -25,6 +26,23 @@ ROLE_LABELS = {
     "email_reviewer":     "Email",
     "personal_assistant": "Assistant",
     "market_watcher":     "Market",
+}
+
+# Trigger types each role's queue events show up under (see agent/registry.py
+# TRIGGER_TO_ROLE — kept in sync by hand since this is display-only).
+ROLE_TRIGGER_TYPES = {
+    "support_agent":      ["support_ticket"],
+    "email_reviewer":     ["cron", "microsoft_email"],  # "cron" also carries daily_summary/market_watch jobs
+    "personal_assistant": ["message"],
+    "market_watcher":     ["market_event"],
+}
+
+# Fixed cron schedule from main.py's start_scheduler(), in UTC — used only to
+# compute "next scheduled trigger" for the overview cards. support_agent and
+# personal_assistant are event-driven (no fixed schedule).
+SCHEDULE_UTC = {
+    "email_reviewer": ["10:00", "14:00", "18:00", "22:00", "02:00"],
+    "market_watcher": ["08:00"],
 }
 
 def _to_local(dt_utc: datetime) -> datetime:
@@ -35,6 +53,12 @@ def _to_local(dt_utc: datetime) -> datetime:
 
 def _now():
     return _to_local(datetime.now(timezone.utc))
+
+def _parse_utc_iso(ts: str) -> datetime:
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 # ---------------------------------------------------------------------------
 # Data helpers
@@ -48,6 +72,51 @@ def get_queue_events(limit=30):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+def _role_events(role, limit=50):
+    """Queue events belonging to a role, newest first."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    types = ROLE_TRIGGER_TYPES[role]
+    placeholders = ",".join("?" for _ in types)
+    rows = conn.execute(
+        f"SELECT * FROM queue WHERE type IN ({placeholders}) ORDER BY created_at DESC LIMIT ?",
+        (*types, limit)
+    ).fetchall()
+    conn.close()
+    events = [dict(r) for r in rows]
+    if role == "email_reviewer":
+        def _is_email_job(e):
+            if e["type"] == "microsoft_email":
+                return True
+            try:
+                return json_lib.loads(e["payload"]).get("job") == "email_review"
+            except (ValueError, TypeError):
+                return False
+        events = [e for e in events if _is_email_job(e)]
+    return events
+
+def _role_status(role):
+    """(is_running, last_completed_run_iso_utc_or_None)"""
+    events = _role_events(role, limit=10)
+    running = any(e["status"] == "in-progress" for e in events)
+    completed = [e for e in events if e["status"] == "completed"]
+    last_run = completed[0]["created_at"] if completed else None
+    return running, last_run
+
+def _next_scheduled_run(role):
+    times = SCHEDULE_UTC.get(role)
+    if not times:
+        return None
+    now_utc = datetime.now(timezone.utc)
+    candidates = []
+    for t in times:
+        hh, mm = map(int, t.split(":"))
+        candidate = now_utc.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if candidate <= now_utc:
+            candidate += timedelta(days=1)
+        candidates.append(candidate)
+    return _to_local(min(candidates)).isoformat()
 
 def get_sessions(role, days=7):
     sessions_dir = MEMORY_DIR / "roles" / role / "sessions"
@@ -70,6 +139,30 @@ def get_sessions(role, days=7):
         if len(sessions) >= 5:
             break
     return sessions
+
+def get_sessions_detailed(role, limit=20):
+    """Richer session feed for the console SPA: timestamp (ISO, local tz),
+    one-line summary, and the parsed 'Actions taken' list for the
+    expandable tool-call detail view."""
+    sessions_dir = MEMORY_DIR / "roles" / role / "sessions"
+    if not sessions_dir.exists():
+        return []
+    items = []
+    for f in sorted(sessions_dir.glob("*.md"), reverse=True)[:limit]:
+        try:
+            stem = f.stem
+            date_part, time_part = stem.split("T")
+            time_fixed = time_part.replace("-", ":")
+            ts = datetime.fromisoformat(f"{date_part}T{time_fixed}").replace(tzinfo=timezone.utc)
+        except Exception:
+            ts = None
+        content = f.read_text()
+        items.append({
+            "timestamp": _to_local(ts).isoformat() if ts else None,
+            "preview":   _extract_preview(content),
+            "actions":   _parse_session_actions(content),
+        })
+    return items
 
 def get_latest_summary(role):
     summaries_dir = MEMORY_DIR / "roles" / role / "summaries"
@@ -123,206 +216,54 @@ def _extract_preview(content):
             return line.replace("**", "")[:120]
     return ""
 
-def _status_color(status):
-    return {
-        "completed":   "#0f6e56",
-        "queued":      "#b07d2a",
-        "in-progress": "#185fa5",
-        "failed":      "#a32d2d",
-    }.get(status, "#888")
-
-def _role_color(trigger):
-    return {
-        "support_ticket": "#534AB7",
-        "cron":           "#185fa5",
-        "message":        "#993556",
-        "market_event":   "#b07d2a",
-    }.get(trigger, "#888")
-
-# ---------------------------------------------------------------------------
-# Markdown → HTML (sections only — ## headings + bullet lists)
-# ---------------------------------------------------------------------------
-
-def _render_summary_md(content: str) -> str:
-    sections = []
-    current_heading = None
-    current_items   = []
-
-    def flush():
-        if current_heading is None and not current_items:
-            return
-        items_html = "".join(
-            f'<li>{html.escape(item)}</li>' for item in current_items
-        )
-        list_block = f'<ul class="sum-list">{items_html}</ul>' if items_html else ""
-        heading_html = (
-            f'<div class="sum-heading">{html.escape(current_heading)}</div>'
-            if current_heading else ""
-        )
-        sections.append(f'<div class="sum-section">{heading_html}{list_block}</div>')
-
-    for raw_line in content.splitlines():
-        line = raw_line.strip()
-        if line.startswith("## "):
-            flush()
-            current_heading = line[3:]
-            current_items   = []
-        elif line.startswith("- ") or line.startswith("* "):
-            # strip leading bold markers like **Foo**:
-            item = line[2:].replace("**", "")
-            current_items.append(item)
-        elif line.startswith("# "):
-            # top-level title — skip
-            pass
-        elif line and current_heading is not None and not current_items:
-            # prose paragraph under a heading (no bullets yet)
-            current_items.append(line)
-
-    flush()
-    return "".join(sections) if sections else ""
+def _parse_session_actions(content: str) -> list:
+    """Pull the '## Actions taken' numbered list out of a session note, e.g.
+    '1. `delete_email({"email_id": "..."})` -> {"status": "trashed", ...}'.
+    Returned as-is (already human-readable) for the console's expandable
+    tool-call detail view."""
+    lines = content.splitlines()
+    in_section = False
+    actions = []
+    for line in lines:
+        if line.strip().startswith("## Actions taken"):
+            in_section = True
+            continue
+        if in_section:
+            if line.startswith("##") or line.startswith("---"):
+                break
+            stripped = line.strip()
+            if stripped:
+                actions.append(stripped)
+    return actions
 
 # ---------------------------------------------------------------------------
-# CSS
+# Approval execution — shared by the legacy GET routes (kept for
+# mcp_server.py) and the new JSON API routes (used by the console SPA).
+#
+# A pending_queue row created by the DeepAgents backend carries a
+# `_thread_id` in its payload (see agent_deepagents/loop.py's
+# add_to_pending_queue replacement) — approving/rejecting it resumes the
+# checkpointed proposal graph, which is what actually runs (or skips) the
+# real delete_email/microsoft delete call. Rows without a `_thread_id`
+# were created by the legacy backend and keep the original direct-call
+# behavior. Same code path handles both eras' rows.
 # ---------------------------------------------------------------------------
 
-CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-       background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
-:root { --card: #fff; --border: #e0e0dc; --muted: #888; --radius: 10px; }
-.header { background: #1B2A4A; color: white; padding: 14px 24px;
-          display: flex; align-items: center; gap: 12px; }
-.header h1 { font-size: 1.1rem; font-weight: 600; }
-.header .sub { font-size: 0.78rem; opacity: 0.6; margin-left: auto; }
-.tabs { display: flex; gap: 2px; background: #1B2A4A; padding: 0 24px; }
-.tab { padding: 10px 18px; font-size: 0.82rem; font-weight: 500;
-       color: rgba(255,255,255,0.5); border: none; background: none;
-       border-bottom: 2px solid transparent;
-       text-decoration: none; display: inline-block; }
-.tab.active { color: white; border-bottom-color: #5DCAA5; }
-.tab .badge { background: #D85A30; color: white; border-radius: 10px;
-              padding: 1px 6px; font-size: 0.7rem; margin-left: 5px; }
-.body { padding: 20px 24px; max-width: 1100px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.card { background: var(--card); border: 0.5px solid var(--border);
-        border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
-.card h3 { font-size: 0.82rem; font-weight: 600; color: var(--muted);
-           text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
-/* sub-tabs */
-.subtabs { display: flex; gap: 0; border-bottom: 1px solid var(--border);
-           margin-bottom: 16px; }
-.subtab { padding: 7px 16px; font-size: 0.82rem; font-weight: 500; color: var(--muted);
-          text-decoration: none; border-bottom: 2px solid transparent;
-          margin-bottom: -1px; }
-.subtab.active { color: #1B2A4A; border-bottom-color: #1B2A4A; }
-/* summary sections */
-.sum-section { margin-bottom: 16px; }
-.sum-heading { font-size: 0.82rem; font-weight: 700; color: #1B2A4A;
-               text-transform: uppercase; letter-spacing: .03em;
-               margin-bottom: 6px; }
-.sum-list { list-style: none; padding: 0; }
-.sum-list li { font-size: 0.82rem; color: #444; line-height: 1.6;
-               padding: 3px 0 3px 12px; border-left: 2px solid #e0e0dc;
-               margin-bottom: 4px; }
-/* event feed */
-.event-row { display: flex; align-items: center; gap: 8px;
-             padding: 7px 0; border-bottom: 0.5px solid var(--border); font-size: 0.82rem; }
-.event-row:last-child { border-bottom: none; }
-.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.event-type { font-weight: 500; flex: 1; }
-.event-time { color: var(--muted); font-size: 0.75rem; }
-.event-status { font-size: 0.72rem; font-weight: 600; padding: 2px 7px;
-                border-radius: 6px; background: #f0f0ee; }
-/* sessions */
-.session-card { border: 0.5px solid var(--border); border-radius: 8px;
-                padding: 12px; margin-bottom: 10px; background: var(--card); }
-.session-ts { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
-.session-preview { font-size: 0.82rem; line-height: 1.5; color: #444; }
-/* pending */
-.pending-card { border: 0.5px solid var(--border); border-radius: 8px;
-                padding: 12px; margin-bottom: 10px; background: var(--card); }
-.pending-card.selected { border-color: #1B2A4A; background: #f0f4f9; }
-.pending-header { display: flex; align-items: flex-start; gap: 10px; }
-.pending-check { margin-top: 2px; accent-color: #1B2A4A; width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
-.pending-sender  { font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
-.pending-subject { font-size: 0.88rem; font-weight: 500; margin-bottom: 4px; }
-.pending-source  { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
-.pending-reason  { font-size: 0.78rem; color: #666; margin-bottom: 10px; }
-.bulk-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-.bulk-bar label { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.btn { padding: 5px 14px; border-radius: 7px; border: 0.5px solid var(--border);
-       font-size: 0.78rem; font-weight: 500; cursor: pointer;
-       text-decoration: none; display: inline-block; background: white; color: #333; }
-.btn-yes   { border-color: #0f6e56; color: #0f6e56; }
-.btn-no    { border-color: #888;    color: #888; }
-.btn-later { border-color: #b07d2a; color: #b07d2a; }
-.btn:hover { opacity: 0.7; }
-.btn-all { background: #1B2A4A; color: white; border-color: #1B2A4A; margin-bottom: 12px; }
-/* stats */
-.stat { text-align: center; padding: 12px; }
-.stat-num   { font-size: 1.6rem; font-weight: 600; color: #1B2A4A; }
-.stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
-.empty { color: var(--muted); font-size: 0.82rem; padding: 20px 0; text-align: center; }
-/* ── Mobile ── */
-@media (max-width: 600px) {
-  .header { padding: 12px 16px; }
-  .header h1 { font-size: 1rem; }
-  .header .sub { font-size: 0.7rem; }
-  .tabs { padding: 0 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .tab { padding: 10px 12px; font-size: 0.78rem; white-space: nowrap; }
-  .body { padding: 12px 10px; }
-  .grid2 { grid-template-columns: 1fr; }
-  .subtabs { gap: 0; }
-  .subtab { padding: 8px 12px; }
-  .card { padding: 12px; }
-  .btn { padding: 8px 16px; font-size: 0.82rem; }
-  .actions { gap: 8px; }
-  .pending-header { gap: 8px; }
-  .pending-check { width: 20px; height: 20px; }
-  .bulk-bar { gap: 6px; }
-  .session-preview { font-size: 0.8rem; }
-  .stat-num { font-size: 1.3rem; }
-}
-"""
+def _execute_approval(task: dict, approved: bool) -> dict:
+    thread_id = task['payload'].get('_thread_id')
+    if thread_id:
+        from agent_deepagents.approval import resume_approval
+        return resume_approval(thread_id, approved=approved)
+    if not approved:
+        return {"status": "rejected"}
+    if task['task_type'] == 'delete_email_microsoft':
+        from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
+        return ms_delete(task['payload']['email_id'])
+    return delete_email(task['payload']['email_id'])
 
 # ---------------------------------------------------------------------------
-# Page shell
-# ---------------------------------------------------------------------------
-
-def render_page(active_tab, content, pending_count):
-    tabs = [
-        ("dashboard",         "Dashboard",  ""),
-        ("overview",          "Overview",   ""),
-        ("support_agent",     "Support",    ""),
-        ("email_reviewer",    "Email",
-         f'<span class="badge">{pending_count}</span>' if pending_count else ""),
-        ("personal_assistant","Assistant",  ""),
-        ("market_watcher",    "Market",     ""),
-    ]
-    tab_html = "".join(
-        f'<a href="/{t}" class="tab{" active" if t == active_tab else ""}">{label}{badge}</a>'
-        for t, label, badge in tabs
-    )
-    now = _now().strftime("%H:%M %Z")
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Flinch console</title>
-<style>{CSS}</style>
-<meta http-equiv="refresh" content="60">
-</head><body>
-<div class="header">
-  <svg viewBox="0 0 50 30" width="28" height="20" style="vertical-align:middle"><polyline points="2,15 10,15 14,4 18,26 22,8 26,15 38,15 48,15" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  <h1>Flinch</h1>
-  <span class="sub">auto-refresh every 60s &nbsp;·&nbsp; {now}</span>
-</div>
-<div class="tabs">{tab_html}</div>
-<div class="body">{content}</div>
-</body></html>"""
-
-# ---------------------------------------------------------------------------
-# Overview (unchanged)
+# MCP-server-facing JSON API — contracts must not change (mcp_server.py
+# calls these exact paths). See docs/adding-a-role.md / NOTES.md.
 # ---------------------------------------------------------------------------
 
 @app.route('/api/status')
@@ -338,7 +279,7 @@ def api_status():
 
     last_run = next_run = None
     if row:
-        last_run_dt = datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc)
+        last_run_dt = _parse_utc_iso(row[0])
         last_run = last_run_dt.isoformat()
         next_run = (last_run_dt + timedelta(hours=2)).isoformat()
 
@@ -348,325 +289,57 @@ def api_status():
         "next_run":  next_run,
     })
 
+@app.route('/api/email-summary')
+def api_email_summary():
+    summary = get_latest_summary("email_reviewer")
+    sessions = get_sessions("email_reviewer", days=3)
+    return jsonify({
+        "summary": summary["content"] if summary else None,
+        "summary_date": summary["date"] if summary else None,
+        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
+    })
 
-@app.route('/')
-def root():
-    return redirect('/overview')
+@app.route('/api/market-summary')
+def api_market_summary():
+    summary = get_latest_summary("market_watcher")
+    sessions = get_sessions("market_watcher", days=3)
+    return jsonify({
+        "summary": summary["content"] if summary else None,
+        "summary_date": summary["date"] if summary else None,
+        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
+    })
 
-@app.route('/overview')
-def overview():
-    events  = get_queue_events(30)
+@app.route('/api/pending')
+def api_pending():
     pending = get_pending_tasks()
-    today   = _now().strftime("%Y-%m-%d")
-
-    role_counts = {}
-    for role in ROLES:
-        d = MEMORY_DIR / "roles" / role / "sessions"
-        role_counts[role] = len(list(d.glob(f"{today}*.md"))) if d.exists() else 0
-
-    stats_html = '<div class="grid2"><div class="card"><div style="display:flex;gap:0">'
-    for role in ROLES:
-        stats_html += f"""<div class="stat" style="flex:1">
-          <div class="stat-num">{role_counts[role]}</div>
-          <div class="stat-label">{ROLE_LABELS[role]}</div>
-        </div>"""
-    stats_html += '</div></div>'
-    stats_html += f"""<div class="card"><div style="display:flex;gap:0">
-      <div class="stat" style="flex:1">
-        <div class="stat-num">{len([e for e in events if e["status"]=="completed"])}</div>
-        <div class="stat-label">Completed</div>
-      </div>
-      <div class="stat" style="flex:1">
-        <div class="stat-num">{len([e for e in events if e["status"]=="failed"])}</div>
-        <div class="stat-label">Failed</div>
-      </div>
-      <div class="stat" style="flex:1">
-        <div class="stat-num" style="color:#D85A30">{len(pending)}</div>
-        <div class="stat-label">Pending</div>
-      </div>
-    </div></div></div>"""
-
-    feed_rows = ""
-    for e in events[:20]:
-        color = _role_color(e["type"])
-        sc    = _status_color(e["status"])
-        try:
-            dt = datetime.fromisoformat(e["created_at"].replace("Z", "+00:00"))
-            ts = _to_local(dt).strftime("%H:%M")
-        except Exception:
-            ts = e["created_at"][11:16]
-        feed_rows += f"""<div class="event-row">
-          <div class="dot" style="background:{color}"></div>
-          <span class="event-type" style="color:{color}">{e["type"]}</span>
-          <span style="color:#888;font-size:0.75rem">{e["source"]}</span>
-          <span class="event-status" style="color:{sc}">{e["status"]}</span>
-          <span class="event-time">{ts}</span>
-        </div>"""
-
-    content = stats_html
-    content += f'<div class="card"><h3>Recent queue activity</h3>{feed_rows}</div>'
-    return render_page("overview", content, len(pending))
-
-# ---------------------------------------------------------------------------
-# Role tabs — Summary / Actions sub-tabs
-# ---------------------------------------------------------------------------
-
-def role_tab(role):
-    view     = request.args.get("view", "summary")
-    sessions = get_sessions(role, days=7)
-    summary  = get_latest_summary(role)
-    pending  = get_pending_tasks() if role == "email_reviewer" else []
-    base_url = f"/{role}"
-
-    subtabs = (
-        f'<div class="subtabs">'
-        f'<a class="subtab{" active" if view == "summary" else ""}" href="{base_url}?view=summary">Summary</a>'
-        f'<a class="subtab{" active" if view == "actions" else ""}" href="{base_url}?view=actions">Actions'
-        + (f' <span class="badge" style="background:#D85A30">{len(pending)}</span>' if pending and role == "email_reviewer" else "")
-        + '</a></div>'
-    )
-
-    if view == "summary":
-        main_content = _render_summary_tab(role, sessions, summary)
-    else:
-        main_content = _render_actions_tab(role, pending)
-
-    content = subtabs + main_content
-    return render_page(role, content, len(get_pending_tasks()))
-
-
-def _render_summary_tab(role, sessions, summary):
-    html_parts = '<div class="grid2">'
-
-    # Left: sessions
-    sess_html = ""
-    if sessions:
-        for s in sessions[:10]:
-            sess_html += f"""<div class="session-card">
-              <div class="session-ts">{s["timestamp"]}</div>
-              <div class="session-preview" style="line-height:1.6">{html.escape(s["preview"] or "—")}</div>
-            </div>"""
-    else:
-        sess_html = '<div class="empty">No sessions this week</div>'
-    html_parts += f'<div><div class="card"><h3>Last 5 sessions</h3>{sess_html}</div></div>'
-
-    # Right: parsed summary
-    if summary:
-        parsed = _render_summary_md(summary["content"])
-        right = (
-            f'<div class="card"><h3>Latest summary — {summary["date"]}</h3>'
-            + (parsed or '<div class="empty">Summary is empty.</div>')
-            + '</div>'
-        )
-    else:
-        right = (
-            '<div class="card"><div class="empty" style="padding:32px 0">'
-            'No summary yet — the daily summarizer runs at midnight.'
-            '</div></div>'
-        )
-    html_parts += f'<div>{right}</div>'
-    html_parts += '</div>'  # closes grid2
-
-    SKILL_UI = {
-        "email_reviewer": {
-            "title": "Update email review behaviour",
-            "placeholder": "e.g. Don't flag Chamath newsletters as junk — I want to keep those",
-        },
-        "market_watcher": {
-            "title": "Update market watcher behaviour",
-            "placeholder": "e.g. Also flag ex-dividend dates, not just earnings",
-        },
-    }
-
-    if role in SKILL_UI:
-        ui = SKILL_UI[role]
-        html_parts += f"""
-        <div class="card" style="margin-top:16px">
-          <h3>{ui["title"]}</h3>
-          <p style="font-size:0.82rem;color:#666;margin-bottom:12px">
-            Describe what you want the agent to do differently. The skill file will be updated automatically.
-          </p>
-          <textarea id="skill-feedback" rows="3"
-            style="width:100%;font-size:0.82rem;padding:8px;border:0.5px solid var(--border);
-                   border-radius:6px;resize:vertical;font-family:inherit"
-            placeholder="{ui["placeholder"]}"></textarea>
-          <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
-            <a class="btn btn-yes" href="#" onclick="submitFeedback()">Update skill</a>
-            <span id="feedback-status" style="font-size:0.78rem;color:#666"></span>
-          </div>
-        </div>
-        <script>
-        function submitFeedback() {{
-            const feedback = document.getElementById('skill-feedback').value.trim();
-            if (!feedback) {{ alert('Please enter some feedback first.'); return; }}
-            document.getElementById('feedback-status').textContent = 'Updating...';
-            fetch('/update-skill/{role}', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{feedback: feedback}})
-            }})
-            .then(r => r.json())
-            .then(data => {{
-                if (data.status === 'ok') {{
-                    document.getElementById('feedback-status').textContent = '✓ Skill updated';
-                    document.getElementById('skill-feedback').value = '';
-                }} else {{
-                    document.getElementById('feedback-status').textContent = '✗ ' + data.error;
-                }}
-            }})
-            .catch(() => {{
-                document.getElementById('feedback-status').textContent = '✗ Request failed';
-            }});
-        }}
-        </script>"""
-
-    return html_parts
-
-
-def _render_actions_tab(role, pending):
-    if role not in ("email_reviewer", "email_reviewer_microsoft"):
-        return '<div class="card"><div class="empty" style="padding:32px 0">No actions pending.</div></div>'
-
-    if not pending:
-        return '<div class="card"><div class="empty" style="padding:32px 0">No pending approvals.</div></div>'
-
-    cards = ""
+    items = []
     for t in pending:
-        sender  = html.escape(t["payload"].get("sender", ""))
-        subject = html.escape(t["payload"].get("subject", ""))
-        source  = "Microsoft Outlook" if t["task_type"] == "delete_email_microsoft" else "Gmail"
-        try:
-            dt = datetime.fromisoformat(t["created_at"].replace("Z", "+00:00"))
-            date_str = _to_local(dt).strftime("%m-%d %H:%M")
-        except Exception:
-            date_str = t["created_at"][5:16].replace("T", " ")
-        cards += f"""<div class="pending-card" id="card-{t['id']}">
-          <div class="pending-header">
-            <input type="checkbox" class="pending-check" id="chk-{t['id']}"
-                   onchange="toggleCard('{t['id']}', this.checked)">
-            <div style="flex:1">
-              <div class="pending-sender">{sender} &nbsp;·&nbsp; {date_str}</div>
-              <div class="pending-subject">{subject}</div>
-              <div class="pending-source">📬 {source}</div>
-              <div class="pending-reason">{html.escape(t['reason'])}</div>
-              <div class="actions">
-                <a class="btn btn-yes"   href="/approve/{t['id']}">Delete</a>
-                <a class="btn btn-no"    href="/reject/{t['id']}">Keep</a>
-                <a class="btn btn-later" href="/later/{t['id']}">Later</a>
-              </div>
-            </div>
-          </div>
-        </div>"""
+        items.append({
+            "id": t["id"],
+            "sender": t["payload"].get("sender", ""),
+            "subject": t["payload"].get("subject", ""),
+            "reason": t.get("reason", ""),
+            "source": "outlook" if t["task_type"] == "delete_email_microsoft" else "gmail",
+            "created_at": t["created_at"],
+        })
+    return jsonify({"pending": items, "count": len(items)})
 
-    bulk_bar = f"""
-    <div class="bulk-bar">
-      <label><input type="checkbox" id="select-all" onchange="selectAll(this.checked)"> Select all</label>
-      <a class="btn btn-yes"   href="#" onclick="bulkAction('approve')">Delete selected</a>
-      <a class="btn btn-no"    href="#" onclick="bulkAction('reject')">Keep selected</a>
-      <a class="btn btn-later" href="#" onclick="bulkAction('later')">Later selected</a>
-      <span id="sel-count" style="font-size:0.78rem;color:var(--muted);margin-left:4px"></span>
-    </div>
-    <script>
-    function toggleCard(id, checked) {{
-      document.getElementById('card-'+id).classList.toggle('selected', checked);
-      updateCount();
-    }}
-    function selectAll(checked) {{
-      document.querySelectorAll('.pending-check').forEach(c => {{
-        c.checked = checked;
-        toggleCard(c.id.replace('chk-',''), checked);
-      }});
-    }}
-    function updateCount() {{
-      const n = document.querySelectorAll('.pending-check:checked').length;
-      document.getElementById('sel-count').textContent = n ? n + ' selected' : '';
-    }}
-    function bulkAction(action) {{
-      const ids = [...document.querySelectorAll('.pending-check:checked')].map(c => c.id.replace('chk-',''));
-      if (!ids.length) {{ alert('Select at least one email first.'); return; }}
-      window.location = '/bulk-' + action + '?ids=' + ids.join(',');
-    }}
-    </script>"""
-
-    return f'<div class="card"><h3>Pending approvals ({len(pending)})</h3>{bulk_bar}{cards}</div>'
-
-
-@app.route('/support_agent')
-def support_tab():   return role_tab("support_agent")
-
-@app.route('/email_reviewer')
-def email_tab():     return role_tab("email_reviewer")
-
-@app.route('/personal_assistant')
-def assistant_tab(): return role_tab("personal_assistant")
-
-@app.route('/market_watcher')
-def market_tab():    return role_tab("market_watcher")
-
-# ---------------------------------------------------------------------------
-# Approval actions
-# ---------------------------------------------------------------------------
-
-@app.route('/approve/<task_id>')
-def approve(task_id):
-    tasks = get_pending_tasks()
-    task  = next((t for t in tasks if t['id'] == task_id), None)
-    if task:
-        try:
-            if task['task_type'] == 'delete_email_microsoft':
-                from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
-                ms_delete(task['payload']['email_id'])
-            else:
-                delete_email(task['payload']['email_id'])
-        except Exception as e:
-            print(f"[console] delete error: {e}")
-        update_pending_status(task_id, 'approved')
-    return redirect('/email_reviewer?view=actions')
-
-@app.route('/reject/<task_id>')
-def reject(task_id):
-    update_pending_status(task_id, 'rejected')
-    return redirect('/email_reviewer?view=actions')
-
-@app.route('/later/<task_id>')
-def later(task_id):
-    update_pending_status(task_id, 'later')
-    return redirect('/email_reviewer?view=actions')
-
-@app.route('/bulk-approve')
-def bulk_approve():
-    ids = request.args.get('ids', '').split(',')
-    for task_id in ids:
-        if not task_id: continue
-        tasks = get_pending_tasks()
-        task = next((t for t in tasks if t['id'] == task_id), None)
-        if task:
-            try:
-                if task['task_type'] == 'delete_email_microsoft':
-                    from roles.email_reviewer.microsoft_tools import delete_email as ms_delete
-                    ms_delete(task['payload']['email_id'])
-                else:
-                    delete_email(task['payload']['email_id'])
-            except Exception as e:
-                print(f"[console] bulk approve error: {e}")
-            update_pending_status(task_id, 'approved')
-    return redirect('/email_reviewer?view=actions')
-
-@app.route('/bulk-reject')
-def bulk_reject():
-    ids = request.args.get('ids', '').split(',')
-    for task_id in ids:
-        if task_id:
-            update_pending_status(task_id, 'rejected')
-    return redirect('/email_reviewer?view=actions')
-
-@app.route('/bulk-later')
-def bulk_later():
-    ids = request.args.get('ids', '').split(',')
-    for task_id in ids:
-        if task_id:
-            update_pending_status(task_id, 'later')
-    return redirect('/email_reviewer?view=actions')
+@app.route('/api/watchlist')
+def api_watchlist():
+    import csv
+    portfolio_path = Path(__file__).parent.parent / "portfolio.csv"
+    stocks = []
+    if portfolio_path.exists():
+        with open(portfolio_path) as f:
+            for row in csv.DictReader(f):
+                sym = row.get("Symbol", "").strip()
+                if sym:
+                    stocks.append({
+                        "symbol": sym,
+                        "price": row.get("Current Price", ""),
+                        "change": row.get("Change", ""),
+                    })
+    return jsonify({"stocks": stocks})
 
 @app.route('/update-skill/<role>', methods=['POST'])
 def update_skill(role):
@@ -721,223 +394,192 @@ Return only the updated skill file content, nothing else."""
 
     return jsonify({'status': 'ok'})
 
+# ---------------------------------------------------------------------------
+# Legacy GET approval routes — kept unchanged in behavior for
+# mcp_server.py's approve_email/reject_email tools, which call these exact
+# paths. Redirect target updated from the retired /email_reviewer page to
+# the new SPA root.
+# ---------------------------------------------------------------------------
+
+@app.route('/approve/<task_id>')
+def approve(task_id):
+    tasks = get_pending_tasks()
+    task  = next((t for t in tasks if t['id'] == task_id), None)
+    if task:
+        try:
+            _execute_approval(task, approved=True)
+        except Exception as e:
+            print(f"[console] delete error: {e}")
+        update_pending_status(task_id, 'approved')
+    return redirect('/')
+
+@app.route('/reject/<task_id>')
+def reject(task_id):
+    tasks = get_pending_tasks()
+    task  = next((t for t in tasks if t['id'] == task_id), None)
+    if task:
+        try:
+            _execute_approval(task, approved=False)
+        except Exception as e:
+            print(f"[console] reject error: {e}")
+    update_pending_status(task_id, 'rejected')
+    return redirect('/')
+
+@app.route('/later/<task_id>')
+def later(task_id):
+    update_pending_status(task_id, 'later')
+    return redirect('/')
+
+@app.route('/bulk-approve')
+def bulk_approve():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if not task_id: continue
+        tasks = get_pending_tasks()
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if task:
+            try:
+                _execute_approval(task, approved=True)
+            except Exception as e:
+                print(f"[console] bulk approve error: {e}")
+            update_pending_status(task_id, 'approved')
+    return redirect('/')
+
+@app.route('/bulk-reject')
+def bulk_reject():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if not task_id: continue
+        tasks = get_pending_tasks()
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if task:
+            try:
+                _execute_approval(task, approved=False)
+            except Exception as e:
+                print(f"[console] bulk reject error: {e}")
+        update_pending_status(task_id, 'rejected')
+    return redirect('/')
+
+@app.route('/bulk-later')
+def bulk_later():
+    ids = request.args.get('ids', '').split(',')
+    for task_id in ids:
+        if task_id:
+            update_pending_status(task_id, 'later')
+    return redirect('/')
+
 @app.route('/approve-all')
 def approve_all():
     for task in get_pending_tasks():
         try:
-            delete_email(task['payload']['email_id'])
+            _execute_approval(task, approved=True)
             update_pending_status(task['id'], 'approved')
         except Exception as e:
             print(f"[console] bulk delete error: {e}")
-    return redirect('/email_reviewer?view=actions')
+    return redirect('/')
 
+# ---------------------------------------------------------------------------
+# Console SPA-facing JSON API
+# ---------------------------------------------------------------------------
 
-@app.route('/dashboard')
-def dashboard():
-    pending  = get_pending_tasks()
-    events   = get_queue_events(15)
-    today    = _now().strftime("%Y-%m-%d")
+@app.route('/api/roles')
+def api_roles():
+    today = _now().strftime("%Y-%m-%d")
+    result = []
+    for role in ROLES:
+        running, last_run = _role_status(role)
+        sessions = get_sessions(role, days=1)
+        today_count = len(list((MEMORY_DIR / "roles" / role / "sessions").glob(f"{today}*.md"))) \
+            if (MEMORY_DIR / "roles" / role / "sessions").exists() else 0
+        result.append({
+            "role": role,
+            "label": ROLE_LABELS[role],
+            "status": "running" if running else "idle",
+            "last_run": _to_local(_parse_utc_iso(last_run)).isoformat() if last_run else None,
+            "next_run": _next_scheduled_run(role),
+            "summary": (sessions[0]["preview"] if sessions else None) or "No activity yet.",
+            "sessions_today": today_count,
+        })
+    return jsonify({"roles": result})
 
-    # ── Pending banner ──
-    if pending:
-        pending_html = (
-            f'<a href="/email_reviewer?view=actions" style="text-decoration:none">'
-            f'<div class="card" style="background:#FDF3EB;border-color:#D85A30">'
-            f'<div style="display:flex;align-items:center;gap:12px">'
-            f'<span style="font-size:1.8rem;font-weight:700;color:#D85A30">{len(pending)}</span>'
-            f'<div><div style="font-weight:600;color:#D85A30">Pending approvals</div>'
-            f'<div style="font-size:0.78rem;color:#888">Tap to review and approve</div></div>'
-            f'</div></div></a>'
-        )
-    else:
-        pending_html = (
-            '<div class="card" style="background:#EEFBF5;border-color:#0f6e56">'
-            '<div style="font-weight:600;color:#0f6e56">✓ No pending approvals</div></div>'
-        )
+@app.route('/api/roles/<role>/sessions')
+def api_role_sessions(role):
+    if role not in ROLES:
+        return jsonify({"error": "unknown role"}), 404
+    limit = int(request.args.get('limit', 20))
+    return jsonify({
+        "role": role,
+        "sessions": get_sessions_detailed(role, limit=limit),
+        "latest_summary": get_latest_summary(role),
+    })
 
-    # ── Summaries for each role ──
-    def role_panel(role, label, icon):
-        summary  = get_latest_summary(role)
-        sessions = get_sessions(role, days=3)
-        parts = f'<div class="card"><h3>{icon} {label}</h3>'
-        if summary:
-            parsed = _render_summary_md(summary["content"])
-            parts += parsed or '<div class="empty">Summary is empty.</div>'
-            parts += f'<div style="font-size:0.7rem;color:var(--muted);margin-top:8px">{summary["date"]}</div>'
-        elif sessions:
-            parts += f'<div class="session-preview">{html.escape(sessions[0]["preview"] or "—")}</div>'
-        else:
-            parts += '<div class="empty">No data yet</div>'
-        parts += f'<div style="margin-top:8px"><a href="/{role}" style="font-size:0.78rem;color:#185fa5">View details →</a></div>'
-        parts += '</div>'
-        return parts
+@app.route('/api/pending/<task_id>/approve', methods=['POST'])
+def api_pending_approve(task_id):
+    tasks = get_pending_tasks()
+    task  = next((t for t in tasks if t['id'] == task_id), None)
+    if not task:
+        return jsonify({"status": "error", "error": "not found"}), 404
+    try:
+        _execute_approval(task, approved=True)
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+    update_pending_status(task_id, 'approved')
+    return jsonify({"status": "ok"})
 
-    email_panel  = role_panel("email_reviewer", "Email Review", "📬")
-    market_panel = role_panel("market_watcher", "Market Watch", "📈")
-
-    # ── Activity feed (compact) ──
-    feed_rows = ""
-    for e in events[:10]:
-        color = _role_color(e["type"])
-        sc    = _status_color(e["status"])
+@app.route('/api/pending/<task_id>/reject', methods=['POST'])
+def api_pending_reject(task_id):
+    tasks = get_pending_tasks()
+    task  = next((t for t in tasks if t['id'] == task_id), None)
+    if task:
         try:
-            dt = datetime.fromisoformat(e["created_at"].replace("Z", "+00:00"))
-            ts = _to_local(dt).strftime("%H:%M")
-        except Exception:
-            ts = e["created_at"][11:16]
-        feed_rows += f"""<div class="event-row">
-          <div class="dot" style="background:{color}"></div>
-          <span class="event-type" style="color:{color}">{e["type"]}</span>
-          <span class="event-status" style="color:{sc}">{e["status"]}</span>
-          <span class="event-time">{ts}</span>
-        </div>"""
-    feed_html = f'<div class="card"><h3>⚡ Recent activity</h3>{feed_rows or "<div class=empty>No activity</div>"}</div>'
+            _execute_approval(task, approved=False)
+        except Exception as e:
+            return jsonify({"status": "error", "error": str(e)}), 500
+    update_pending_status(task_id, 'rejected')
+    return jsonify({"status": "ok"})
 
-    # ── Skills forms ──
-    SKILL_UI = {
-        "email_reviewer": {
-            "title": "✏️ Update email behaviour",
-            "placeholder": "e.g. Don't flag Chamath newsletters as junk",
-        },
-        "market_watcher": {
-            "title": "✏️ Update market behaviour",
-            "placeholder": "e.g. Also flag ex-dividend dates",
-        },
-    }
-    skills_html = '<div class="grid2">'
-    for role_key, ui in SKILL_UI.items():
-        field_id = f"skill-fb-{role_key}"
-        status_id = f"fb-status-{role_key}"
-        skills_html += f"""<div class="card">
-          <h3>{ui["title"]}</h3>
-          <textarea id="{field_id}" rows="2"
-            style="width:100%;font-size:0.82rem;padding:8px;border:0.5px solid var(--border);
-                   border-radius:6px;resize:vertical;font-family:inherit"
-            placeholder="{ui["placeholder"]}"></textarea>
-          <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
-            <a class="btn btn-yes" href="#" onclick="submitSkill('{role_key}')">Update</a>
-            <span id="{status_id}" style="font-size:0.78rem;color:#666"></span>
-          </div>
-        </div>"""
-    skills_html += '</div>'
+@app.route('/api/pending/bulk', methods=['POST'])
+def api_pending_bulk():
+    data = request.get_json() or {}
+    action = data.get('action')
+    ids = data.get('ids', [])
+    if action not in ('approve', 'reject', 'later'):
+        return jsonify({"status": "error", "error": "invalid action"}), 400
 
-    skills_script = """
-    <script>
-    function submitSkill(role) {
-        const fb = document.getElementById('skill-fb-' + role);
-        const st = document.getElementById('fb-status-' + role);
-        if (!fb.value.trim()) { alert('Please enter some feedback first.'); return; }
-        st.textContent = 'Updating...';
-        fetch('/update-skill/' + role, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({feedback: fb.value.trim()})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'ok') { st.textContent = '✓ Updated'; fb.value = ''; }
-            else { st.textContent = '✗ ' + data.error; }
-        })
-        .catch(() => { st.textContent = '✗ Request failed'; });
-    }
-    </script>"""
-
-    # ── Watchlist ──
-    import csv
-    portfolio_path = Path(__file__).parent.parent / "portfolio.csv"
-    stocks_html = '<div class="card"><h3>📊 Watchlist</h3><div style="display:flex;flex-wrap:wrap;gap:8px">'
-    if portfolio_path.exists():
-        with open(portfolio_path) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                sym = row.get("Symbol", "").strip()
-                price = row.get("Current Price", "")
-                change = row.get("Change", "")
-                if not sym:
-                    continue
+    tasks_by_id = {t['id']: t for t in get_pending_tasks()}
+    for task_id in ids:
+        task = tasks_by_id.get(task_id)
+        if action == 'approve' and task:
+            try:
+                _execute_approval(task, approved=True)
+            except Exception as e:
+                print(f"[console] bulk approve error: {e}")
+            update_pending_status(task_id, 'approved')
+        elif action == 'reject':
+            if task:
                 try:
-                    chg = float(change)
-                    color = "#0f6e56" if chg >= 0 else "#a32d2d"
-                    arrow = "▲" if chg >= 0 else "▼"
-                    chg_str = f'{arrow} {abs(chg):.2f}'
-                except (ValueError, TypeError):
-                    color = "#888"
-                    chg_str = ""
-                stocks_html += (
-                    f'<a href="https://finance.yahoo.com/quote/{sym}" target="_blank" '
-                    f'style="text-decoration:none;border:0.5px solid var(--border);border-radius:8px;'
-                    f'padding:8px 12px;background:var(--card);display:inline-block;min-width:100px">'
-                    f'<div style="font-size:0.78rem;font-weight:600;color:#1B2A4A">{sym}</div>'
-                    f'<div style="font-size:0.88rem;font-weight:500">${price}</div>'
-                    f'<div style="font-size:0.72rem;color:{color}">{chg_str}</div>'
-                    f'</a>'
-                )
-    else:
-        stocks_html += '<div class="empty">No portfolio.csv found</div>'
-    stocks_html += '</div></div>'
+                    _execute_approval(task, approved=False)
+                except Exception as e:
+                    print(f"[console] bulk reject error: {e}")
+            update_pending_status(task_id, 'rejected')
+        elif action == 'later':
+            update_pending_status(task_id, 'later')
+    return jsonify({"status": "ok"})
 
-    # ── Assemble ──
-    content = pending_html
-    content += stocks_html
-    content += '<div class="grid2">' + email_panel + market_panel + '</div>'
-    content += skills_html
-    content += skills_script
-    content += feed_html
+# ---------------------------------------------------------------------------
+# Serve the built SPA (console-ui/, `npm run build` -> console-ui/dist)
+# ---------------------------------------------------------------------------
 
-    return render_page("dashboard", content, len(pending))
+@app.route('/')
+def index():
+    return send_from_directory(FRONTEND_DIST, 'index.html')
 
-
-@app.route('/api/email-summary')
-def api_email_summary():
-    summary = get_latest_summary("email_reviewer")
-    sessions = get_sessions("email_reviewer", days=3)
-    return jsonify({
-        "summary": summary["content"] if summary else None,
-        "summary_date": summary["date"] if summary else None,
-        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
-    })
-
-@app.route('/api/market-summary')
-def api_market_summary():
-    summary = get_latest_summary("market_watcher")
-    sessions = get_sessions("market_watcher", days=3)
-    return jsonify({
-        "summary": summary["content"] if summary else None,
-        "summary_date": summary["date"] if summary else None,
-        "recent_sessions": [{"timestamp": s["timestamp"], "preview": s["preview"]} for s in sessions[:5]],
-    })
-
-@app.route('/api/pending')
-def api_pending():
-    pending = get_pending_tasks()
-    items = []
-    for t in pending:
-        items.append({
-            "id": t["id"],
-            "sender": t["payload"].get("sender", ""),
-            "subject": t["payload"].get("subject", ""),
-            "reason": t.get("reason", ""),
-            "source": "outlook" if t["task_type"] == "delete_email_microsoft" else "gmail",
-            "created_at": t["created_at"],
-        })
-    return jsonify({"pending": items, "count": len(items)})
-
-@app.route('/api/watchlist')
-def api_watchlist():
-    import csv
-    portfolio_path = Path(__file__).parent.parent / "portfolio.csv"
-    stocks = []
-    if portfolio_path.exists():
-        with open(portfolio_path) as f:
-            for row in csv.DictReader(f):
-                sym = row.get("Symbol", "").strip()
-                if sym:
-                    stocks.append({
-                        "symbol": sym,
-                        "price": row.get("Current Price", ""),
-                        "change": row.get("Change", ""),
-                    })
-    return jsonify({"stocks": stocks})
+@app.route('/<path:path>')
+def static_proxy(path):
+    candidate = FRONTEND_DIST / path
+    if candidate.exists() and candidate.is_file():
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, 'index.html')
 
 
 if __name__ == '__main__':

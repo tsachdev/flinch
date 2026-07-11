@@ -1,0 +1,447 @@
+.app {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+
+.header {
+  background: var(--header-bg);
+  color: #fff;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tab-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.badge {
+  background: var(--red);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ── Main ── */
+
+.main {
+  flex: 1;
+  padding: 24px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.section-title {
+  font-size: 1rem;
+  margin-bottom: 14px;
+}
+
+.empty-state {
+  color: var(--text);
+  opacity: 0.7;
+  padding: 40px 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.back-button {
+  margin-bottom: 16px;
+  display: inline-block;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+/* ── Role overview grid ── */
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.role-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.role-card:hover {
+  border-color: var(--accent-border);
+}
+
+.role-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-icon {
+  font-size: 1.1rem;
+}
+
+.role-name {
+  font-weight: 600;
+  color: var(--text-h);
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-idle {
+  color: var(--text);
+  background: var(--code-bg);
+}
+.status-idle .status-dot {
+  background: var(--text);
+}
+
+.status-running {
+  color: var(--green);
+  background: var(--green-bg);
+}
+.status-running .status-dot {
+  background: var(--green);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.role-summary {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+  min-height: 2.6em;
+}
+
+.role-card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text);
+  opacity: 0.75;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+/* ── Session feed ── */
+
+.session-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.session-item-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.session-ts {
+  font-size: 0.72rem;
+  color: var(--text);
+  opacity: 0.7;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.session-preview {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  flex: 1;
+  color: var(--text-h);
+}
+
+.session-actions {
+  margin: 10px 0 0;
+  padding: 10px 0 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Approvals ── */
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.bulk-select-all {
+  font-size: 0.82rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.bulk-count {
+  font-size: 0.78rem;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.approval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.approval-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.approval-card-selected {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.approval-checkbox {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.approval-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.75;
+  margin-bottom: 3px;
+}
+
+.approval-subject {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.approval-reason {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.approval-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ── */
+
+.btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  opacity: 0.8;
+}
+
+.btn-approve {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.btn-reject {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.btn-defer {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Skills ── */
+
+.skill-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.skill-card h3 {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.skill-hint {
+  font-size: 0.78rem;
+  color: var(--text);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.skill-card textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.skill-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skill-status {
+  font-size: 0.78rem;
+}
+
+.skill-status-ok { color: var(--green); }
+.skill-status-error { color: var(--red); }
+
+/* ── Mobile ── */
+
+@media (max-width: 640px) {
+  .header { padding: 10px 14px; gap: 12px; }
+  .main { padding: 14px; }
+  .approval-card { flex-wrap: wrap; }
+  .approval-actions { width: 100%; }
+  .session-item-row { flex-wrap: wrap; }
+}

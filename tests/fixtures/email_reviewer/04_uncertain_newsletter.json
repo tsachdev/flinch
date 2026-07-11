@@ -1,0 +1,13 @@
+{
+  "flexible": true,
+  "note": "Genuinely ambiguous — an LLM could reasonably delete, mark-read-as-update, or queue this. Comparison reports but doesn't hard-fail on split decisions here.",
+  "emails": [
+    {
+      "id": "fx04-1",
+      "from": "digest@nextdoor-style-community.example.com",
+      "subject": "3 new updates from your neighborhood",
+      "date": "Sat, 11 Jul 2026 07:00:00 -0400",
+      "preview": "A neighbor posted about a lost cat. Another shared a recommendation for a plumber. See all activity."
+    }
+  ]
+}

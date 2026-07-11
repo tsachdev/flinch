@@ -2,7 +2,7 @@ import time
 import schedule
 from eventqueue.bus import init_queue, enqueue
 from gateway.router import register
-from agent.loop import run_agent
+from agent.dispatch import run_agent
 from memory.writer import write_session
 from memory.summarizer import summarize_today
 

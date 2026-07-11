@@ -46,6 +46,22 @@ ROLE_PROVIDERS = {
     "market_watcher": "google",   # use Gemma for market watcher
 }
 
+# Fallback provider to use when a role's primary provider raises any exception
+# (timeout, rate limit, auth error, etc.) — keyed by primary provider name.
+# A value of None means no fallback for that provider.
+ROLE_PROVIDER_FALLBACK = {
+    "google":    "anthropic",
+    "anthropic": None,
+}
+
+# Agent loop backend — "deepagents" (agent_deepagents/) or "legacy" (agent/).
+# Both implementations run side by side; this flag picks which one handles
+# events. Cut over to "deepagents" as the default in M6 of the Phase 1
+# migration (see flinch-phase1-deepagents-spec.md) — shadow-mode verified
+# against legacy first (see NOTES.md). Set back to "legacy" to roll back;
+# the legacy loop is kept fully functional for at least one release cycle.
+AGENT_BACKEND = "deepagents"
+
 # Timezone for console display (e.g. "America/New_York", "Asia/Kolkata", "Europe/London")
 DISPLAY_TIMEZONE = "America/New_York"
 

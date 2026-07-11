@@ -13,3 +13,8 @@ msal
 requests
 google-genai
 httpx
+langgraph
+langgraph-checkpoint-sqlite
+langchain
+langchain-anthropic
+langchain-google-genai

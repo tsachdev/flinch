@@ -1,0 +1,25 @@
+{
+  "emails": [
+    {
+      "id": "fx01-1",
+      "from": "deals@retailoutlet.example.com",
+      "subject": "70% OFF everything - today only!",
+      "date": "Sat, 11 Jul 2026 08:00:00 -0400",
+      "preview": "Huge summer clearance sale. Shop now before it's gone. Unsubscribe at any time."
+    },
+    {
+      "id": "fx01-2",
+      "from": "newsletter@dailydeals.example.com",
+      "subject": "Your weekly deals digest is here",
+      "date": "Sat, 11 Jul 2026 07:30:00 -0400",
+      "preview": "Top 10 deals this week curated just for you. Click to browse the full list."
+    },
+    {
+      "id": "fx01-3",
+      "from": "promotions@streamingservice.example.com",
+      "subject": "We miss you! Come back for 50% off",
+      "date": "Sat, 11 Jul 2026 06:15:00 -0400",
+      "preview": "It's been a while. Reactivate your subscription today and save."
+    }
+  ]
+}

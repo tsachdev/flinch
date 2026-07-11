@@ -1,0 +1,9 @@
+{
+  "note": "get_order always returns customer_id 1204 (mock data) — using a different customer_id here creates a genuine ownership mismatch the agent should catch before crediting anything.",
+  "payload": {
+    "ticket_id": "T-4471",
+    "customer_id": "7788",
+    "order_id": "9902",
+    "query": "Customer 7788 is asking for loyalty points on order 9902, claims it's their order."
+  }
+}

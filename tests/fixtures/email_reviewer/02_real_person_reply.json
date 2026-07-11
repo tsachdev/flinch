@@ -1,0 +1,11 @@
+{
+  "emails": [
+    {
+      "id": "fx02-1",
+      "from": "jordan.rivera@example.com",
+      "subject": "Quick question about Saturday",
+      "date": "Sat, 11 Jul 2026 09:12:00 -0400",
+      "preview": "Hey, are we still on for Saturday afternoon? Let me know what time works best for you."
+    }
+  ]
+}
