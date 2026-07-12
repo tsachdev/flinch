@@ -51,7 +51,7 @@ Event Sources (Gmail, webhooks, cron, messages)
 
 **Skills** are plain Markdown files that tell agents how to behave in specific situations — no code changes needed to extend agent behaviour.
 
-**Model abstraction** separates the agent loop from any specific LLM provider. Each role can run on a different model — Claude for nuanced reasoning, Gemma 4 for structured tasks. Provider fallback is built in via LangChain middleware: if the primary provider fails, Flinch automatically retries with the configured fallback.
+**Model abstraction** separates the agent loop from any specific LLM provider. DigitalOcean's GenAI Platform (NVIDIA NIM-hosted, OpenAI-API-compatible) is the default primary provider for all roles, with Anthropic Claude Haiku as the fallback. Provider fallback is built in via LangChain middleware: if the primary provider fails, Flinch automatically retries with the configured fallback.
 
 ---
 
@@ -131,7 +131,7 @@ Flinch runs three agent roles continuously from a single deployment. Here's what
 **Microsoft Outlook reviewer — every 2 hours**
 ```
 [agent] session c4d1e2 — role: email_reviewer
-  [llm] provider: google, model: models/gemma-4-26b-a4b-it
+  [llm] provider: nvidia, model: your-model-name
   [tool] get_unread_emails({})
   [microsoft] fetched 16 unread emails
   [tool] add_to_pending_queue → 9 newsletters queued for approval
@@ -298,8 +298,8 @@ See `docs/deployment.md` for the full setup guide.
 
 - **Python 3.9+**
 - **LangChain / LangGraph** — agent loop (`langchain.agents.create_agent`) and checkpoint/interrupt-based approvals (`langgraph-checkpoint-sqlite`)
-- **Anthropic Claude** — default LLM provider (claude-haiku class)
-- **Google AI Studio / Gemma 4** — alternative provider for structured roles (free tier)
+- **DigitalOcean GenAI Platform (NVIDIA NIM-hosted, OpenAI-API-compatible)** — default LLM provider for all roles
+- **Anthropic Claude** — fallback provider (claude-haiku class)
 - **SQLite** — event queue, pending actions, and (separately) agent checkpoints
 - **Flask** — console API, serving a built React SPA as static files
 - **React + Vite** — console frontend (`console-ui/`)
@@ -320,7 +320,7 @@ An older, hand-rolled agent loop and provider abstraction (`agent/`) is kept as 
 ```
 flinch/
 ├── agent/              # legacy agent loop + provider abstraction (rollback path)
-│   ├── providers/  # LLM provider implementations (Anthropic, Google)
+│   ├── providers/  # LLM provider implementations (Anthropic, NVIDIA/DO GenAI)
 │   ├── llm.py      # Provider-agnostic model router
 │   └── ...
 ├── agent_deepagents/    # LangChain/LangGraph agent loop (default backend)
@@ -345,7 +345,7 @@ flinch/
 
 ## Roadmap
 
-- [x] Multi-model support per role (Anthropic + Google AI Studio / Gemma 4)
+- [x] Multi-model support per role (DigitalOcean GenAI Platform/NVIDIA NIM primary + Anthropic fallback; Google AI Studio/Gemma dropped)
 - [x] Microsoft Outlook connector via Graph API
 - [x] Human-in-the-loop approval console with bulk actions
 - [x] Skill feedback form — update agent behaviour without code changes

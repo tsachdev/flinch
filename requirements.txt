@@ -11,10 +11,10 @@ yfinance
 pytest
 msal
 requests
-google-genai
 httpx
+openai
 langgraph
 langgraph-checkpoint-sqlite
 langchain
 langchain-anthropic
-langchain-google-genai
+langchain-openai

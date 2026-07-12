@@ -18,22 +18,22 @@ class TestLegacyFallback(unittest.TestCase):
     def _role(self, name="market_watcher"):
         return {"name": name}
 
-    @patch("agent.providers.google.chat")
+    @patch("agent.providers.nvidia.chat")
     @patch("agent.providers.anthropic.chat")
-    def test_falls_back_on_primary_exception(self, mock_anthropic_chat, mock_google_chat):
+    def test_falls_back_on_primary_exception(self, mock_anthropic_chat, mock_nvidia_chat):
         from agent import llm
 
         with patch.dict("config.ROLE_PROVIDERS", {"default": "anthropic", "test_role": "anthropic"}), \
-             patch.dict("config.ROLE_PROVIDER_FALLBACK", {"anthropic": "google"}):
+             patch.dict("config.ROLE_PROVIDER_FALLBACK", {"anthropic": "nvidia"}):
             mock_anthropic_chat.side_effect = TimeoutError("boom")
-            mock_google_chat.return_value = {"stop_reason": "end_turn", "content": [], "raw": [], "tokens": 1}
+            mock_nvidia_chat.return_value = {"stop_reason": "end_turn", "content": [], "raw": [], "tokens": 1}
 
             with patch("agent.providers.anthropic.create_client", return_value=MagicMock()), \
-                 patch("agent.providers.google.create_client", return_value=MagicMock()):
+                 patch("agent.providers.nvidia.create_client", return_value=MagicMock()):
                 result = llm.chat(self._role("test_role"), "sys", [{"role": "user", "content": "hi"}], [])
 
         mock_anthropic_chat.assert_called_once()
-        mock_google_chat.assert_called_once()
+        mock_nvidia_chat.assert_called_once()
         self.assertEqual(result["tokens"], 1)
 
     @patch("agent.providers.anthropic.chat")
@@ -61,21 +61,21 @@ class TestDeepAgentsFallback(unittest.TestCase):
     def test_falls_back_on_primary_exception(self):
         from agent_deepagents import providers
 
-        primary  = self._fake_model("anthropic", should_raise=True)
-        fallback = self._fake_model("google", should_raise=False)
+        primary  = self._fake_model("nvidia", should_raise=True)
+        fallback = self._fake_model("anthropic", should_raise=False)
 
         def fake_init(provider, model, max_tokens):
-            return primary if provider == "anthropic" else fallback
+            return fallback if provider == "anthropic" else primary
 
         with patch.dict("agent_deepagents.providers.ROLE_PROVIDERS",
-                        {"default": "anthropic", "test_role": "anthropic"}, clear=True), \
+                        {"default": "nvidia", "test_role": "nvidia"}, clear=True), \
              patch.dict("agent_deepagents.providers.ROLE_PROVIDER_FALLBACK",
-                        {"anthropic": "google"}, clear=True), \
+                        {"nvidia": "anthropic"}, clear=True), \
              patch("agent_deepagents.providers._init_chat_model", side_effect=fake_init):
             model = providers.get_model({"name": "test_role"})
             result = model.invoke("hi")
 
-        self.assertEqual(result, "google-ok")
+        self.assertEqual(result, "anthropic-ok")
 
     def test_no_fallback_reraises(self):
         from agent_deepagents import providers
@@ -98,17 +98,17 @@ class TestDeepAgentsFallback(unittest.TestCase):
 class TestParity(unittest.TestCase):
     """Same config, same failure -> same fallback decision, both implementations."""
 
-    def test_google_primary_falls_back_to_anthropic_both_implementations(self):
+    def test_nvidia_primary_falls_back_to_anthropic_both_implementations(self):
         from agent import llm
         from agent_deepagents import providers
 
         # Legacy
-        with patch.dict("config.ROLE_PROVIDERS", {"default": "anthropic", "test_role": "google"}), \
-             patch.dict("config.ROLE_PROVIDER_FALLBACK", {"google": "anthropic"}), \
-             patch("agent.providers.google.chat", side_effect=RuntimeError("rate limited")), \
+        with patch.dict("config.ROLE_PROVIDERS", {"default": "anthropic", "test_role": "nvidia"}), \
+             patch.dict("config.ROLE_PROVIDER_FALLBACK", {"nvidia": "anthropic"}), \
+             patch("agent.providers.nvidia.chat", side_effect=RuntimeError("rate limited")), \
              patch("agent.providers.anthropic.chat",
                    return_value={"stop_reason": "end_turn", "content": [], "raw": [], "tokens": 7}), \
-             patch("agent.providers.google.create_client", return_value=MagicMock()), \
+             patch("agent.providers.nvidia.create_client", return_value=MagicMock()), \
              patch("agent.providers.anthropic.create_client", return_value=MagicMock()):
             legacy_result = llm.chat({"name": "test_role"}, "sys", [{"role": "user", "content": "hi"}], [])
 
@@ -117,15 +117,15 @@ class TestParity(unittest.TestCase):
             raise RuntimeError("rate limited")
 
         anthropic_fake = RunnableLambda(lambda x: "anthropic-ok")
-        google_fake     = RunnableLambda(_raise_rate_limited)
+        nvidia_fake     = RunnableLambda(_raise_rate_limited)
 
         def fake_init(provider, model, max_tokens):
-            return google_fake if provider == "google" else anthropic_fake
+            return nvidia_fake if provider == "nvidia" else anthropic_fake
 
         with patch.dict("agent_deepagents.providers.ROLE_PROVIDERS",
-                        {"default": "anthropic", "test_role": "google"}, clear=True), \
+                        {"default": "anthropic", "test_role": "nvidia"}, clear=True), \
              patch.dict("agent_deepagents.providers.ROLE_PROVIDER_FALLBACK",
-                        {"google": "anthropic"}, clear=True), \
+                        {"nvidia": "anthropic"}, clear=True), \
              patch("agent_deepagents.providers._init_chat_model", side_effect=fake_init):
             model = providers.get_model({"name": "test_role"})
             new_result = model.invoke("hi")
@@ -148,12 +148,12 @@ class TestDeepAgentsMiddlewareFallback(unittest.TestCase):
         fallback = RunnableLambda(lambda x: "fallback-ok")
 
         def fake_init(provider, model, max_tokens):
-            return primary if provider == "anthropic" else fallback
+            return primary if provider == "nvidia" else fallback
 
         with patch.dict("agent_deepagents.providers.ROLE_PROVIDERS",
-                        {"default": "anthropic", "test_role": "anthropic"}, clear=True), \
+                        {"default": "nvidia", "test_role": "nvidia"}, clear=True), \
              patch.dict("agent_deepagents.providers.ROLE_PROVIDER_FALLBACK",
-                        {"anthropic": "google"}, clear=True), \
+                        {"nvidia": "anthropic"}, clear=True), \
              patch("agent_deepagents.providers._init_chat_model", side_effect=fake_init):
             model, middleware = providers.get_model_and_middleware({"name": "test_role"})
 

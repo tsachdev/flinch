@@ -343,8 +343,7 @@ def api_watchlist():
 
 @app.route('/update-skill/<role>', methods=['POST'])
 def update_skill(role):
-    import google.genai as genai
-    from config import GOOGLE_API_KEY
+    from agent.providers.anthropic import simple_complete
 
     data = request.get_json()
     feedback = data.get('feedback', '').strip()
@@ -359,10 +358,7 @@ def update_skill(role):
     triage_file = skill_files[0]
     current_skill = triage_file.read_text()
 
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    response = client.models.generate_content(
-        model="models/gemma-4-26b-a4b-it",
-        contents=f"""You are updating an agent skill file based on user feedback.
+    updated_skill = simple_complete(f"""You are updating an agent skill file based on user feedback.
 
 Current skill file:
 {current_skill}
@@ -372,10 +368,8 @@ User feedback:
 
 Rewrite the skill file incorporating the feedback. Keep the YAML frontmatter unchanged.
 Keep the overall structure. Only update the rules and special cases to reflect the feedback.
-Return only the updated skill file content, nothing else."""
-    )
+Return only the updated skill file content, nothing else.""", max_tokens=2048)
 
-    updated_skill = response.text
     triage_file.write_text(updated_skill)
     print(f"[console] skill updated for {role} — feedback: {feedback[:60]}...")
 

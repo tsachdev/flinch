@@ -1,12 +1,10 @@
 import json
 from datetime import datetime
 from pathlib import Path
-import google.genai as genai
-from config import GOOGLE_API_KEY, MARKET_WATCHER_RECIPIENT
+from agent.providers.anthropic import simple_complete
+from config import MARKET_WATCHER_RECIPIENT
 
 MEMORY_DIR = Path(__file__).parent
-client     = genai.Client(api_key=GOOGLE_API_KEY)
-MODEL      = "models/gemma-4-26b-a4b-it"
 
 ROLES = ["support_agent", "email_reviewer", "personal_assistant", "market_watcher"]
 
@@ -69,8 +67,7 @@ Format exactly as:
 SESSION NOTES:
 {sessions[:6000]}"""
 
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    return response.text
+    return simple_complete(prompt)
 
 def _send_digest(summaries: dict, today: str):
     """Send a nightly digest email summarising all agent activity."""

@@ -5,12 +5,9 @@ from pathlib import Path
 MEMORY_DIR = Path(__file__).parent
 
 def _generate_console_summary(role: str, response: str, tool_calls: list) -> str:
-    """Generate a 2-sentence console summary using Gemma 4."""
+    """Generate a 2-sentence console summary."""
     try:
-        import google.genai as genai
-        from config import GOOGLE_API_KEY
-
-        client = genai.Client(api_key=GOOGLE_API_KEY)
+        from agent.providers.anthropic import simple_complete
 
         tool_summary = ", ".join(
             f"{c['tool']}" for c in tool_calls
@@ -24,11 +21,7 @@ Role: {role}
 Tools used: {tool_summary}
 Agent response: {response[:500]}"""
 
-        result = client.models.generate_content(
-            model="models/gemma-4-26b-a4b-it",
-            contents=prompt
-        )
-        return result.text.strip()
+        return simple_complete(prompt).strip()
     except Exception as e:
         print(f"[memory] console summary failed (non-fatal): {e}")
         for line in response.splitlines():

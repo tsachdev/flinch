@@ -15,7 +15,7 @@ ROLE_MAX_TOKENS = {
 }
 
 ROLE_MODELS = {
-    # "market_watcher": "gemma-2-2b-it",  # uncomment to override default
+    # "market_watcher": "claude-sonnet-4-6",  # uncomment to override default
 }
 
 def get_role(trigger_type: str) -> dict:
