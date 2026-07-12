@@ -11,8 +11,10 @@ they don't run as part of the normal fast/free `pytest` suite. Opt in with:
 
 FLINCH_SHADOW_PROVIDER defaults to anthropic for email_reviewer/
 market_watcher — during M2 development Google's Gemma endpoint was visibly
-flaky (slow, occasional ServerErrors) — set FLINCH_SHADOW_PROVIDER=google
-to compare against the configured production provider instead.
+flaky (slow, occasional ServerErrors); Gemma has since been dropped
+entirely in favor of DigitalOcean's GenAI Platform (NVIDIA NIM) as the
+primary provider — set FLINCH_SHADOW_PROVIDER=nvidia to compare against
+the configured production provider instead.
 """
 import os
 import unittest

@@ -12,11 +12,13 @@ from config import ROLE_PROVIDERS, ROLE_PROVIDER_FALLBACK
 
 _DEFAULT_MODELS = {
     "anthropic": "claude-haiku-4-5-20251001",
-    "google":    "models/gemma-4-26b-a4b-it",
 }
 
 
 def _default_model(provider: str) -> str:
+    if provider == "nvidia":
+        from config import DO_GENAI_MODEL
+        return DO_GENAI_MODEL
     return _DEFAULT_MODELS[provider]
 
 
@@ -25,10 +27,10 @@ def _init_chat_model(provider: str, model: str, max_tokens: int):
         from langchain_anthropic import ChatAnthropic
         from config import ANTHROPIC_API_KEY
         return ChatAnthropic(model=model, max_tokens=max_tokens, api_key=ANTHROPIC_API_KEY)
-    elif provider == "google":
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        from config import GOOGLE_API_KEY
-        return ChatGoogleGenerativeAI(model=model, max_output_tokens=max_tokens, api_key=GOOGLE_API_KEY)
+    elif provider == "nvidia":
+        from langchain_openai import ChatOpenAI
+        from config import DO_GENAI_API_KEY, DO_GENAI_BASE_URL
+        return ChatOpenAI(model=model, max_tokens=max_tokens, api_key=DO_GENAI_API_KEY, base_url=DO_GENAI_BASE_URL)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 

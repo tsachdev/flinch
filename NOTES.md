@@ -291,6 +291,61 @@ Flask (`ui/console.py`), replacing every server-rendered HTML route
   spec's rollback plan, it should stay that way for at least one release
   cycle after the real cutover, and only be removed on explicit sign-off.
 
+## Post-Phase-1: NVIDIA (DigitalOcean GenAI Platform) provider switch
+
+Follow-up after the M0-M6 cutover (2026-07-12): swapped the default LLM
+provider from Google AI Studio/Gemma to DigitalOcean's GenAI Platform
+(NVIDIA NIM-hosted, OpenAI-API-compatible serverless inference), with
+Anthropic Claude Haiku as the fallback. Gemma dropped entirely, per
+explicit request — not just deprioritized.
+
+- **agent_deepagents/providers.py** (active backend): `_init_chat_model`'s
+  `"google"` branch replaced with `"nvidia"`, using `langchain_openai`'s
+  `ChatOpenAI` with a custom `base_url` rather than a new SDK — DO's
+  endpoint is OpenAI-compatible, no reason to add another client class.
+  Model name comes from `config.DO_GENAI_MODEL` (unlike Anthropic's
+  hardcoded default, since which model to hit is entirely dependent on
+  what's provisioned in the user's DO account, not a fixed constant).
+- **agent/providers/nvidia.py** (legacy rollback path — mirrored per
+  explicit sign-off, since the user wants the rollback path on the same
+  providers too, not left on Gemma): new file, same shape as the deleted
+  `agent/providers/google.py` — Anthropic-style tool schema/message-history
+  conversion to OpenAI's format, using the raw `openai` SDK (legacy avoids
+  LangChain by design). `raw` in the returned response is the *normalized*
+  content-block list (not an OpenAI SDK object), exactly like `google.py`
+  did, so `_convert_messages` can rebuild OpenAI's shape fresh on every
+  turn rather than needing round-tripped native history.
+- **Three more Gemma call sites found outside the `ROLE_PROVIDERS`
+  abstraction entirely** (worth knowing about if `google.genai` shows up
+  again in a `grep` someday): `memory/summarizer.py`'s nightly digest
+  summarization, `memory/writer.py`'s 2-sentence console summary, and
+  `ui/console.py`'s skill-file rewrite from plain-English feedback. All
+  three were simple, single-turn, no-tool-calling text completions with
+  their own ad hoc Gemma client setup — switched to a new
+  `agent.providers.anthropic.simple_complete()` helper (Haiku, no
+  history/tools) rather than wiring the heavier NVIDIA/OpenAI-compatible
+  path into three more places for marginal benefit. These are incidental,
+  cheap calls; not part of the "NVIDIA primary" ask specifically, just
+  needed a home once Gemma left.
+- `config.example.py`: `GOOGLE_API_KEY` replaced with `DO_GENAI_API_KEY`/
+  `DO_GENAI_BASE_URL`/`DO_GENAI_MODEL` placeholders (real values live only
+  in each deployment's gitignored `config.py`, same as every other
+  credential in this file). `ROLE_PROVIDERS["default"]` is now `"nvidia"`
+  for every role (no more market_watcher-specific override, since there's
+  nothing left to override to).
+- `requirements.txt`/`requirements-server.txt`: `google-genai` and
+  `langchain-google-genai` removed; `openai` and `langchain-openai` added.
+  (`google-api-core`/`google-api-python-client`/`google-auth*`/
+  `googleapis-common-protos` all **stay** — those are Gmail API deps,
+  unrelated to the Gemini/Gemma provider.)
+- Not yet verified live: this was implemented without real DigitalOcean
+  GenAI Platform credentials (placeholders only) — no shadow-mode run
+  against the real NVIDIA endpoint has happened. Whoever deploys this
+  needs to fill in real `DO_GENAI_API_KEY`/`DO_GENAI_BASE_URL`/
+  `DO_GENAI_MODEL` values and re-run `scripts/shadow_compare.py` (or at
+  least a manual smoke test) before trusting it in production, the same
+  way the original migration was shadow-verified before cutover.
+
 ## Open decisions carried into M0+
 
 1. **AGENT_BACKEND dispatch point**: branch inside a thin new `run_agent(event)` wrapper (could live in `agent/loop.py` itself, or a new tiny module) that imports either `agent.loop.run_agent` or `agent_deepagents.loop.run_agent` based on `config.AGENT_BACKEND` — keeps `main.py` untouched.

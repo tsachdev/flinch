@@ -38,19 +38,24 @@ MICROSOFT_CLIENT_ID  = "your-client-id"
 MICROSOFT_TENANT_ID  = "consumers"
 MICROSOFT_TOKEN_FILE = "microsoft_token.json"
 
-# Model provider config
-GOOGLE_API_KEY = "your-google-api-key-here"
+# DigitalOcean GenAI Platform (NVIDIA NIM-hosted API) — primary model
+# provider for all roles. Get your API key, endpoint, and model name from
+# the GenAI Platform section of the DigitalOcean control panel. Serverless
+# inference there is OpenAI-API-compatible (used via langchain-openai /
+# the openai SDK, not a bespoke client).
+DO_GENAI_API_KEY  = "your-digitalocean-genai-api-key"
+DO_GENAI_BASE_URL = "https://your-do-genai-endpoint/v1"
+DO_GENAI_MODEL    = "your-model-name"  # e.g. a Llama/Nemotron variant from DO's model catalog
 
 ROLE_PROVIDERS = {
-    "default":        "anthropic",
-    "market_watcher": "google",   # use Gemma for market watcher
+    "default": "nvidia",
 }
 
 # Fallback provider to use when a role's primary provider raises any exception
 # (timeout, rate limit, auth error, etc.) — keyed by primary provider name.
 # A value of None means no fallback for that provider.
 ROLE_PROVIDER_FALLBACK = {
-    "google":    "anthropic",
+    "nvidia":    "anthropic",
     "anthropic": None,
 }
 

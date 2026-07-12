@@ -24,9 +24,9 @@ def _call_provider(provider, model, max_tokens, system, messages, tools):
     if provider == "anthropic":
         from agent.providers.anthropic import chat as anthropic_chat
         return anthropic_chat(client, model, max_tokens, system, messages, tools)
-    elif provider == "google":
-        from agent.providers.google import chat as google_chat
-        return google_chat(client, model, max_tokens, system, messages, tools)
+    elif provider == "nvidia":
+        from agent.providers.nvidia import chat as nvidia_chat
+        return nvidia_chat(client, model, max_tokens, system, messages, tools)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -35,16 +35,18 @@ def _get_client(provider):
         if provider == "anthropic":
             from agent.providers.anthropic import create_client
             _clients[provider] = create_client()
-        elif provider == "google":
-            from agent.providers.google import create_client
+        elif provider == "nvidia":
+            from agent.providers.nvidia import create_client
             _clients[provider] = create_client()
         else:
             raise ValueError(f"Unknown provider: {provider}")
     return _clients[provider]
 
 def _default_model(provider):
+    if provider == "nvidia":
+        from config import DO_GENAI_MODEL
+        return DO_GENAI_MODEL
     defaults = {
         "anthropic": "claude-haiku-4-5-20251001",
-        "google":    "models/gemma-4-26b-a4b-it",
     }
     return defaults[provider]
