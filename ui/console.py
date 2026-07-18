@@ -250,6 +250,10 @@ def _parse_session_actions(content: str) -> list:
 # ---------------------------------------------------------------------------
 
 def _execute_approval(task: dict, approved: bool) -> dict:
+    gl_thread_id = task['payload'].get('_gl_thread_id')
+    if gl_thread_id:
+        from agent_deepagents import graduation
+        return graduation.resume(gl_thread_id, approved=approved)
     thread_id = task['payload'].get('_thread_id')
     if thread_id:
         from agent_deepagents.approval import resume_approval
@@ -323,6 +327,16 @@ def api_pending():
             "created_at": t["created_at"],
         })
     return jsonify({"pending": items, "count": len(items)})
+
+@app.route('/api/graduation')
+def api_graduation():
+    """Level status, metrics, advisories, and open proposals from the
+    Graduation Ledger (execution-layer M3). 404-shaped empty payload when
+    the graduation gate is not enabled on this instance."""
+    from agent_deepagents import graduation
+    if not graduation.enabled():
+        return jsonify({"enabled": False})
+    return jsonify({"enabled": True, **graduation.status()})
 
 @app.route('/api/watchlist')
 def api_watchlist():

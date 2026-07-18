@@ -31,7 +31,7 @@ from langchain.agents import create_agent
 from agent.registry import get_role
 from agent.context import build_context
 from agent.loop import _build_user_message
-from agent_deepagents import approval
+from agent_deepagents import approval, graduation
 from agent_deepagents.providers import get_model_and_middleware
 from agent_deepagents.tools import wrap_tool_registry, replace_tool, _schema_to_pydantic
 
@@ -97,6 +97,9 @@ def build_agent(trigger_type: str, event: dict):
             wrapped_tools, "add_to_pending_queue", _make_pending_queue_tool(task_type),
             add_pending_spec["description"], args_schema,
         )
+
+    if graduation.enabled() and role["name"] == "email_reviewer":
+        wrapped_tools = graduation.wrap_gated_tools(wrapped_tools, role, trigger_type)
 
     model, middleware = get_model_and_middleware(role)
 

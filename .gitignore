@@ -13,3 +13,5 @@ token.json
 portfolio.csv
 microsoft_auth.py
 microsoft_token.json
+graduation_ledger.jsonl
+flinch_graduation_checkpoints.db
