@@ -1,4 +1,5 @@
 from config import ROLE_PROVIDERS, ROLE_PROVIDER_FALLBACK
+from agent import fallback_alert
 
 _clients = {}
 
@@ -8,11 +9,14 @@ def chat(role, system, messages, tools):
     max_tokens = role.get("max_tokens", 1024)
 
     try:
-        return _call_provider(provider, model, max_tokens, system, messages, tools)
+        result = _call_provider(provider, model, max_tokens, system, messages, tools)
+        fallback_alert.record_success(provider)
+        return result
     except Exception as e:
         fallback = ROLE_PROVIDER_FALLBACK.get(provider)
         if fallback:
             print(f"  [llm] {provider} failed ({type(e).__name__}) — falling back to {fallback}")
+            fallback_alert.record_fallback(provider, fallback, e)
             fallback_model = _default_model(fallback)
             return _call_provider(fallback, fallback_model, max_tokens, system, messages, tools)
         raise

@@ -157,7 +157,11 @@ class TestDeepAgentsMiddlewareFallback(unittest.TestCase):
              patch("agent_deepagents.providers._init_chat_model", side_effect=fake_init):
             model, middleware = providers.get_model_and_middleware({"name": "test_role"})
 
-        self.assertEqual(len(middleware), 1)
+        # [ProviderFallbackMiddleware, AnthropicPromptCachingMiddleware] since
+        # the post-incident caching fix; fallback must stay first (outermost)
+        # so caching sees the post-fallback model.
+        self.assertEqual(len(middleware), 2)
+        self.assertIsInstance(middleware[0], providers.ProviderFallbackMiddleware)
 
         def handler(request):
             return request.model.invoke("hi")
@@ -170,7 +174,7 @@ class TestDeepAgentsMiddlewareFallback(unittest.TestCase):
         self.assertEqual(result, "fallback-ok")
         fake_request.override.assert_called_once_with(model=fallback)
 
-    def test_no_middleware_when_no_fallback_configured(self):
+    def test_no_fallback_middleware_when_no_fallback_configured(self):
         from agent_deepagents import providers
 
         primary = RunnableLambda(lambda x: "primary-ok")
@@ -182,7 +186,11 @@ class TestDeepAgentsMiddlewareFallback(unittest.TestCase):
              patch("agent_deepagents.providers._init_chat_model", return_value=primary):
             model, middleware = providers.get_model_and_middleware({"name": "test_role"})
 
-        self.assertEqual(middleware, [])
+        # No fallback middleware, but the caching middleware is always present
+        # (it no-ops for non-Anthropic models).
+        self.assertFalse(any(isinstance(m, providers.ProviderFallbackMiddleware)
+                             for m in middleware))
+        self.assertEqual(len(middleware), 1)
         self.assertIs(model, primary)
 
 

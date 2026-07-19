@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 import msal
 import requests
 
+from roles.email_reviewer import idempotency
+
 TOKEN_PATH = Path(__file__).parent.parent.parent / "microsoft_token.json"
 GRAPH_BASE  = "https://graph.microsoft.com/v1.0"
 
@@ -130,31 +132,37 @@ def create_draft(to: str, subject: str, body: str) -> dict:
 @tool("mark_read")
 def mark_read(email_id: str) -> dict:
     """Mark a Microsoft email as read via Graph API."""
-    url = f"{GRAPH_BASE}/me/messages/{email_id}"
-    resp = requests.patch(url, headers=_headers(), json={"isRead": True})
-    resp.raise_for_status()
-    return {"status": "marked_read", "email_id": email_id}
+    def _run():
+        url = f"{GRAPH_BASE}/me/messages/{email_id}"
+        resp = requests.patch(url, headers=_headers(), json={"isRead": True})
+        resp.raise_for_status()
+        return {"status": "marked_read", "email_id": email_id}
+    return idempotency.check_and_record("mark_read", email_id, _run)
 
 @tool("delete_email")
 def delete_email(email_id: str) -> dict:
     """Move a Microsoft email to the Deleted Items folder via Graph API."""
-    url = f"{GRAPH_BASE}/me/messages/{email_id}/move"
-    resp = requests.post(url, headers=_headers(), json={"destinationId": "deleteditems"})
-    resp.raise_for_status()
-    print(f"  [microsoft] moved to deleted items → {email_id[:16]}...")
-    return {"status": "trashed", "email_id": email_id}
+    def _run():
+        url = f"{GRAPH_BASE}/me/messages/{email_id}/move"
+        resp = requests.post(url, headers=_headers(), json={"destinationId": "deleteditems"})
+        resp.raise_for_status()
+        print(f"  [microsoft] moved to deleted items → {email_id[:16]}...")
+        return {"status": "trashed", "email_id": email_id}
+    return idempotency.check_and_record("delete_email", email_id, _run)
 
 @tool("add_to_pending_queue")
 def add_to_pending_queue(email_id: str, subject: str, sender: str, reason: str) -> dict:
     """Add a Microsoft email deletion to the pending approval queue."""
-    from eventqueue.bus import enqueue_pending
-    task_id = enqueue_pending(
-        task_type="delete_email_microsoft",
-        payload={"email_id": email_id, "subject": subject, "sender": sender},
-        reason=reason,
-    )
-    print(f"  [pending] queued microsoft deletion → {task_id[:8]}")
-    return {"status": "queued", "task_id": task_id, "email_id": email_id}
+    def _run():
+        from eventqueue.bus import enqueue_pending
+        task_id = enqueue_pending(
+            task_type="delete_email_microsoft",
+            payload={"email_id": email_id, "subject": subject, "sender": sender},
+            reason=reason,
+        )
+        print(f"  [pending] queued microsoft deletion → {task_id[:8]}")
+        return {"status": "queued", "task_id": task_id, "email_id": email_id}
+    return idempotency.check_and_record("add_to_pending_queue", email_id, _run)
 
 # ── Tool schemas (identical interface to Gmail tools) ─────────────────
 

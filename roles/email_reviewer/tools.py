@@ -7,6 +7,8 @@ from googleapiclient.discovery import build
 import base64
 import email as email_lib
 
+from roles.email_reviewer import idempotency
+
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/gmail.compose',
@@ -95,34 +97,40 @@ def create_draft(to: str, subject: str, body: str) -> dict:
 
 @tool("mark_read")
 def mark_read(email_id: str) -> dict:
-    service = _get_service()
-    service.users().messages().modify(
-        userId='me',
-        id=email_id,
-        body={'removeLabelIds': ['UNREAD']}
-    ).execute()
-    return {"status": "marked_read", "email_id": email_id}
+    def _run():
+        service = _get_service()
+        service.users().messages().modify(
+            userId='me',
+            id=email_id,
+            body={'removeLabelIds': ['UNREAD']}
+        ).execute()
+        return {"status": "marked_read", "email_id": email_id}
+    return idempotency.check_and_record("mark_read", email_id, _run)
 
 @tool("delete_email")
 def delete_email(email_id: str) -> dict:
-    service = _get_service()
-    service.users().messages().trash(
-        userId='me',
-        id=email_id
-    ).execute()
-    print(f"  [gmail] trashed → {email_id}")
-    return {"status": "trashed", "email_id": email_id}
+    def _run():
+        service = _get_service()
+        service.users().messages().trash(
+            userId='me',
+            id=email_id
+        ).execute()
+        print(f"  [gmail] trashed → {email_id}")
+        return {"status": "trashed", "email_id": email_id}
+    return idempotency.check_and_record("delete_email", email_id, _run)
 
 @tool("add_to_pending_queue")
 def add_to_pending_queue(email_id: str, subject: str, sender: str, reason: str) -> dict:
-    from eventqueue.bus import enqueue_pending
-    task_id = enqueue_pending(
-        task_type="delete_email",
-        payload={"email_id": email_id, "subject": subject, "sender": sender},
-        reason=reason
-    )
-    print(f"  [pending] queued deletion task → {task_id[:8]}")
-    return {"status": "queued", "task_id": task_id, "email_id": email_id}
+    def _run():
+        from eventqueue.bus import enqueue_pending
+        task_id = enqueue_pending(
+            task_type="delete_email",
+            payload={"email_id": email_id, "subject": subject, "sender": sender},
+            reason=reason
+        )
+        print(f"  [pending] queued deletion task → {task_id[:8]}")
+        return {"status": "queued", "task_id": task_id, "email_id": email_id}
+    return idempotency.check_and_record("add_to_pending_queue", email_id, _run)
 
 TOOLS = [
     {

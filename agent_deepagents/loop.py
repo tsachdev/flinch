@@ -68,13 +68,19 @@ def _make_pending_queue_tool(task_type: str):
     console can list it the same way it lists legacy rows, carrying a
     `_thread_id` in the payload for the resume step (M3)."""
     def _fn(email_id: str, subject: str, sender: str, reason: str) -> dict:
-        from eventqueue.bus import enqueue_pending
+        from roles.email_reviewer import idempotency
 
-        thread_id = str(uuid.uuid4())
-        payload = {"email_id": email_id, "subject": subject, "sender": sender, "_thread_id": thread_id}
-        approval.start_approval(thread_id, task_type, payload, reason)
-        task_id = enqueue_pending(task_type, payload, reason)
-        return {"status": "queued", "task_id": task_id, "email_id": email_id}
+        def _run():
+            from eventqueue.bus import enqueue_pending
+
+            thread_id = str(uuid.uuid4())
+            payload = {"email_id": email_id, "subject": subject, "sender": sender, "_thread_id": thread_id}
+            approval.start_approval(thread_id, task_type, payload, reason)
+            task_id = enqueue_pending(task_type, payload, reason)
+            return {"status": "queued", "task_id": task_id, "email_id": email_id}
+        # Same guard as the registry tools — the Jul 17-18 retry loop queued
+        # duplicate proposals for the same email within one session.
+        return idempotency.check_and_record("add_to_pending_queue", email_id, _run)
     return _fn
 
 

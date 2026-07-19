@@ -59,6 +59,17 @@ ROLE_PROVIDER_FALLBACK = {
     "anthropic": None,
 }
 
+# Fallback alerting (agent/fallback_alert.py) — the fallback above is silent
+# by design for transient blips, but sustained fallback means every call is
+# billing the fallback provider's key (see the Jul 2026 incident: primary
+# rate-limited for 3 days unnoticed). After FALLBACK_ALERT_THRESHOLD
+# consecutive fallbacks, an alert email is sent to FALLBACK_ALERT_RECIPIENT,
+# at most once per FALLBACK_ALERT_COOLDOWN_HOURS. The streak resets whenever
+# the primary succeeds. All three are optional; defaults shown.
+FALLBACK_ALERT_THRESHOLD      = 5
+FALLBACK_ALERT_COOLDOWN_HOURS = 6
+FALLBACK_ALERT_RECIPIENT      = MARKET_WATCHER_RECIPIENT
+
 # Agent loop backend — "deepagents" (agent_deepagents/) or "legacy" (agent/).
 # Both implementations run side by side; this flag picks which one handles
 # events. Cut over to "deepagents" as the default in M6 of the Phase 1
