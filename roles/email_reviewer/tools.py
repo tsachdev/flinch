@@ -55,30 +55,37 @@ def _get_body(msg):
 
 @tool("get_unread_emails")
 def get_unread_emails() -> dict:
-    service = _get_service()
-    results = service.users().messages().list(
-        userId='me',
-        q='is:unread',
-        maxResults=10
-    ).execute()
-
-    messages = results.get('messages', [])
-    emails = []
-    for m in messages:
-        msg = service.users().messages().get(
-            userId='me', id=m['id'], format='full'
+    def _run():
+        service = _get_service()
+        # Scope to the inbox only. Bare `is:unread` matches unread mail
+        # ANYWHERE — including archived messages and other labels — which is
+        # how the 2026-07-19 runaway reached ancient archived mail. `in:inbox`
+        # keeps us to the inbox (excludes archive/spam/trash); Gmail's
+        # messages.list already returns newest-first, so no ordering needed.
+        results = service.users().messages().list(
+            userId='me',
+            q='is:unread in:inbox',
+            maxResults=10
         ).execute()
-        headers = {h['name']: h['value'] for h in msg['payload']['headers']}
-        emails.append({
-            'id':      m['id'],
-            'from':    headers.get('From', ''),
-            'subject': headers.get('Subject', ''),
-            'date':    headers.get('Date', ''),
-            'preview': _get_body(msg)
-        })
 
-    print(f"  [gmail] fetched {len(emails)} unread emails")
-    return {"emails": emails}
+        messages = results.get('messages', [])
+        emails = []
+        for m in messages:
+            msg = service.users().messages().get(
+                userId='me', id=m['id'], format='full'
+            ).execute()
+            headers = {h['name']: h['value'] for h in msg['payload']['headers']}
+            emails.append({
+                'id':      m['id'],
+                'from':    headers.get('From', ''),
+                'subject': headers.get('Subject', ''),
+                'date':    headers.get('Date', ''),
+                'preview': _get_body(msg)
+            })
+
+        print(f"  [gmail] fetched {len(emails)} unread emails")
+        return {"emails": emails}
+    return idempotency.guard("get_unread_emails", _run)
 
 @tool("create_draft")
 def create_draft(to: str, subject: str, body: str) -> dict:

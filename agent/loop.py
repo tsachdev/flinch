@@ -16,7 +16,30 @@ def run_agent(event: dict) -> dict:
     all_tool_calls = []
     total_tokens   = 0
 
+    # Reset per-session guards for this run (see roles/email_reviewer/idempotency).
+    try:
+        from roles.email_reviewer import idempotency
+        idempotency.reset_session()
+    except Exception:
+        pass
+
+    # Hard backstop on the unbounded `while True` loop — mirrors the
+    # recursion_limit cap on the deepagents path. Primary defense is the
+    # per-session action caps; this stops a pathological loop regardless.
+    import config
+    _max_turns = getattr(config, "AGENT_RECURSION_LIMIT", 60)
+    _turns = 0
+
     while True:
+        _turns += 1
+        if _turns > _max_turns:
+            print(f"[agent] hit max turns ({_max_turns}) — ending session")
+            return {
+                "session_id": session_id, "event_type": event_type,
+                "role": role["name"], "payload": payload,
+                "response": f"[session ended: reached max turns {_max_turns}]",
+                "tool_calls": all_tool_calls, "tokens": total_tokens,
+            }
         response = llm.chat(role, system_prompt, messages, role["tools"])
         total_tokens += response["tokens"]
 

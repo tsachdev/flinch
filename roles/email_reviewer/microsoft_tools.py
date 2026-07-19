@@ -89,29 +89,31 @@ def _get_body(message: dict) -> str:
 @tool("get_unread_emails")
 def get_unread_emails() -> dict:
     """Fetch unread emails from Microsoft inbox via Graph API."""
-    url = (
-        f"{GRAPH_BASE}/me/mailFolders/inbox/messages"
-        "?$filter=isRead eq false"
-        "&$select=id,from,subject,receivedDateTime,bodyPreview,body"
-        "&$top=15"
-        "&$orderby=receivedDateTime desc"
-    )
-    resp = requests.get(url, headers=_headers())
-    resp.raise_for_status()
-    messages = resp.json().get("value", [])
+    def _run():
+        url = (
+            f"{GRAPH_BASE}/me/mailFolders/inbox/messages"
+            "?$filter=isRead eq false"
+            "&$select=id,from,subject,receivedDateTime,bodyPreview,body"
+            "&$top=15"
+            "&$orderby=receivedDateTime desc"
+        )
+        resp = requests.get(url, headers=_headers())
+        resp.raise_for_status()
+        messages = resp.json().get("value", [])
 
-    emails = []
-    for m in messages:
-        emails.append({
-            "id":      m["id"],
-            "from":    m.get("from", {}).get("emailAddress", {}).get("address", ""),
-            "subject": m.get("subject", ""),
-            "date":    m.get("receivedDateTime", ""),
-            "preview": _get_body(m),
-        })
+        emails = []
+        for m in messages:
+            emails.append({
+                "id":      m["id"],
+                "from":    m.get("from", {}).get("emailAddress", {}).get("address", ""),
+                "subject": m.get("subject", ""),
+                "date":    m.get("receivedDateTime", ""),
+                "preview": _get_body(m),
+            })
 
-    print(f"  [microsoft] fetched {len(emails)} unread emails")
-    return {"emails": emails}
+        print(f"  [microsoft] fetched {len(emails)} unread emails")
+        return {"emails": emails}
+    return idempotency.guard("get_unread_emails", _run)
 
 @tool("create_draft")
 def create_draft(to: str, subject: str, body: str) -> dict:

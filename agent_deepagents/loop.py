@@ -122,8 +122,22 @@ def run_agent(event: dict) -> dict:
     trigger_type = event["type"]
     agent, role = build_agent(trigger_type, event)
 
+    # Reset per-session guards (idempotency + per-run action caps) so limits
+    # apply to THIS run, not the process lifetime.
+    from roles.email_reviewer import idempotency
+    idempotency.reset_session()
+
     user_message = _build_user_message(trigger_type, event["payload"])
-    state = agent.invoke({"messages": [{"role": "user", "content": user_message}]})
+    # Hard backstop: create_agent defaults recursion_limit to 9,999 (~5000
+    # tool calls) — that's what let the 2026-07-19 run trash 77 emails before
+    # anything stopped it. Cap it low; the per-session action caps in
+    # idempotency.guard are the primary defense, this is belt-and-suspenders.
+    import config
+    recursion_limit = getattr(config, "AGENT_RECURSION_LIMIT", 60)
+    state = agent.invoke(
+        {"messages": [{"role": "user", "content": user_message}]},
+        config={"recursion_limit": recursion_limit},
+    )
 
     return _extract_result(state, event, role)
 

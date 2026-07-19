@@ -70,6 +70,21 @@ FALLBACK_ALERT_THRESHOLD      = 5
 FALLBACK_ALERT_COOLDOWN_HOURS = 6
 FALLBACK_ALERT_RECIPIENT      = MARKET_WATCHER_RECIPIENT
 
+# Per-session safety caps for the email_reviewer role. get_unread_emails
+# already caps each fetch at 10, but nothing bounded a whole *session* — on
+# 2026-07-19 one run fetched-and-purged in a loop and trashed 77 emails.
+# These caps bound a single run: at most N fetches and N deletes before the
+# tool refuses and the session ends (remaining items wait for the next run).
+EMAIL_MAX_FETCHES_PER_SESSION = 3
+EMAIL_MAX_DELETES_PER_SESSION = 15
+EMAIL_MAX_QUEUED_PER_SESSION  = 15
+
+# Hard backstop on agent loop length (deepagents recursion_limit / legacy
+# max turns). create_agent defaults this to 9,999; we cap it far lower so a
+# pathological loop can't run away. Raise only if a legitimate role needs
+# more tool round-trips per event.
+AGENT_RECURSION_LIMIT = 60
+
 # Agent loop backend — "deepagents" (agent_deepagents/) or "legacy" (agent/).
 # Both implementations run side by side; this flag picks which one handles
 # events. Cut over to "deepagents" as the default in M6 of the Phase 1
