@@ -47,15 +47,27 @@ DO_GENAI_API_KEY  = "your-digitalocean-genai-api-key"
 DO_GENAI_BASE_URL = "https://your-do-genai-endpoint/v1"
 DO_GENAI_MODEL    = "your-model-name"  # e.g. a Llama/Nemotron variant from DO's model catalog
 
+# DeepSeek API (primary provider) — OpenAI-compatible endpoint with tool
+# calling. Get a key at https://platform.deepseek.com/api_keys. We use
+# deepseek-v4-flash (the cheap V4 model: ~$0.14/M in, $0.28/M out, with big
+# prompt-cache discounts) rather than DO-hosted DeepSeek R1, because R1 is a
+# reasoning model with weaker function calling and every Flinch role is
+# tool-driven. Note: the old deepseek-chat / deepseek-reasoner aliases are
+# deprecated 2026-07-24 — use the explicit v4 model name.
+DEEPSEEK_API_KEY  = "your-deepseek-api-key"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL    = "deepseek-v4-flash"
+
 ROLE_PROVIDERS = {
-    "default": "nvidia",
+    "default": "deepseek",
 }
 
 # Fallback provider to use when a role's primary provider raises any exception
 # (timeout, rate limit, auth error, etc.) — keyed by primary provider name.
 # A value of None means no fallback for that provider.
 ROLE_PROVIDER_FALLBACK = {
-    "nvidia":    "anthropic",
+    "deepseek":  "anthropic",
+    "nvidia":    "anthropic",  # kept for easy rollback to the DO endpoint
     "anthropic": None,
 }
 

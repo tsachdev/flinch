@@ -31,6 +31,9 @@ def _call_provider(provider, model, max_tokens, system, messages, tools):
     elif provider == "nvidia":
         from agent.providers.nvidia import chat as nvidia_chat
         return nvidia_chat(client, model, max_tokens, system, messages, tools)
+    elif provider == "deepseek":
+        from agent.providers.deepseek import chat as deepseek_chat
+        return deepseek_chat(client, model, max_tokens, system, messages, tools)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -42,6 +45,9 @@ def _get_client(provider):
         elif provider == "nvidia":
             from agent.providers.nvidia import create_client
             _clients[provider] = create_client()
+        elif provider == "deepseek":
+            from agent.providers.deepseek import create_client
+            _clients[provider] = create_client()
         else:
             raise ValueError(f"Unknown provider: {provider}")
     return _clients[provider]
@@ -50,6 +56,9 @@ def _default_model(provider):
     if provider == "nvidia":
         from config import DO_GENAI_MODEL
         return DO_GENAI_MODEL
+    if provider == "deepseek":
+        from config import DEEPSEEK_MODEL
+        return DEEPSEEK_MODEL
     defaults = {
         "anthropic": "claude-haiku-4-5-20251001",
     }

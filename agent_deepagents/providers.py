@@ -19,6 +19,9 @@ def _default_model(provider: str) -> str:
     if provider == "nvidia":
         from config import DO_GENAI_MODEL
         return DO_GENAI_MODEL
+    if provider == "deepseek":
+        from config import DEEPSEEK_MODEL
+        return DEEPSEEK_MODEL
     return _DEFAULT_MODELS[provider]
 
 
@@ -31,6 +34,11 @@ def _init_chat_model(provider: str, model: str, max_tokens: int):
         from langchain_openai import ChatOpenAI
         from config import DO_GENAI_API_KEY, DO_GENAI_BASE_URL
         return ChatOpenAI(model=model, max_tokens=max_tokens, api_key=DO_GENAI_API_KEY, base_url=DO_GENAI_BASE_URL)
+    elif provider == "deepseek":
+        # DeepSeek's API is OpenAI-compatible with tool-calling support.
+        from langchain_openai import ChatOpenAI
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
+        return ChatOpenAI(model=model, max_tokens=max_tokens, api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
