@@ -91,8 +91,16 @@ def _send_digest(summaries: dict, today: str):
             creds.refresh(Request())
         service = build('gmail', 'v1', credentials=creds)
 
-        # Build email body
+        # Build email body — lead with the health block so any provider
+        # fallback / cap / error for the day is the first thing seen.
         body_lines = [f"# Flinch Daily Digest — {today}\n"]
+        try:
+            from memory.health import health_report
+            body_lines.append(health_report(today))
+            body_lines.append("")
+        except Exception as e:
+            print(f"[summarizer] health block failed (non-fatal): {e}")
+
         for role, summary in summaries.items():
             body_lines.append(f"\n{'='*40}")
             body_lines.append(f"## {role.replace('_', ' ').title()}")
